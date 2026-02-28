@@ -164,5 +164,3 @@ sudo systemctl start swingbot
 ## License
 
 This project is for personal/educational use.
-# swing-trading-bot
-# swing-trading-bot
