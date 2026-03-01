@@ -20,7 +20,7 @@ from execution.retry import with_retry
 
 logger = logging.getLogger(__name__)
 
-DELTA_DEMO_BASE = "https://cdn-ind.testnet.deltaex.org"
+DELTA_DEMO_BASE = "https://demo.delta.exchange"
 DELTA_LIVE_BASE = "https://api.india.delta.exchange"
 
 # Delta side mapping
@@ -101,12 +101,21 @@ class DeltaClient(ExchangeAdapter):
             return self._product_cache[symbol]
         try:
             data = self._get("/v2/products", params={"contract_type": "perpetual_futures"})
-            for product in data.get("result", []):
+            products = data.get("result", [])
+            for product in products:
                 if product.get("symbol") == symbol:
                     pid = str(product["id"])
                     self._product_cache[symbol] = pid
                     return pid
-            logger.error(f"Delta: product not found for symbol {symbol}")
+            available = [
+                f"{p.get('symbol')} (id={p.get('id')})"
+                for p in products
+                if p.get("contract_type") == "perpetual_futures"
+            ]
+            logger.error(
+                f"Delta: product not found for symbol '{symbol}'. "
+                f"Available perpetual futures ({len(available)}): {', '.join(available)}"
+            )
             return None
         except Exception as e:
             logger.error(f"Delta: get_product_id failed: {e}")

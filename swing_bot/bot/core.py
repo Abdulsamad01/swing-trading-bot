@@ -103,6 +103,9 @@ class TradingBot:
     # --------------------------------------------------------------- scheduler
 
     def _run_loop(self):
+        reconcile_interval = self.cfg.reconcile_interval_seconds
+        last_reconcile_ts = 0.0
+
         while self.running:
             # Poll Telegram commands
             self.tg.poll_commands()
@@ -112,10 +115,21 @@ class TradingBot:
                 continue
 
             now_utc = datetime.now(timezone.utc)
+            now_ts = now_utc.timestamp()
             next_candle = self._seconds_until_next_candle(now_utc)
 
+            # Between candles: reconcile open positions frequently
+            if next_candle > 0 and self.state == BotState.OPEN:
+                if now_ts - last_reconcile_ts >= reconcile_interval:
+                    try:
+                        self._reconcile()
+                        last_reconcile_ts = now_ts
+                    except Exception as e:
+                        logger.exception(f"Inter-candle reconcile error: {e}")
+                time.sleep(5)
+                continue
+
             if next_candle > 0:
-                # Sleep in small increments to stay responsive to Telegram commands
                 sleep_step = min(5, next_candle)
                 time.sleep(sleep_step)
                 continue
@@ -127,6 +141,7 @@ class TradingBot:
 
             try:
                 self._run_cycle()
+                last_reconcile_ts = now_ts  # reset after full cycle
             except Exception as e:
                 logger.exception(f"Cycle error: {e}")
                 self.repo.log_event("ERROR", "cycle_error", str(e))
