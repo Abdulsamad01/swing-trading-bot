@@ -663,15 +663,17 @@ class TradingBot:
             self.tg.send("❌ Cannot switch exchange while position is open.")
             return
         self.cfg.exchange = "delta_demo"
+        self.cfg.symbol = self.cfg.demo_symbol
         self.exchange = self._build_exchange()
-        self.tg.send("✅ Switched to <b>delta_demo</b> exchange.")
-        logger.info("Exchange switched to delta_demo via Telegram")
+        self.tg.send(f"✅ Switched to <b>delta_demo</b> ({self.cfg.symbol}).")
+        logger.info(f"Exchange switched to delta_demo, symbol={self.cfg.symbol}")
 
     def _cmd_live(self, args):
         if self.state == BotState.OPEN:
             self.tg.send("❌ Cannot switch exchange while position is open.")
             return
         self.cfg.exchange = "coinswitch_live"
+        self.cfg.symbol = self.cfg.live_symbol
         self.exchange = self._build_exchange()
-        self.tg.send("✅ Switched to <b>coinswitch_live</b> exchange.")
-        logger.info("Exchange switched to coinswitch_live via Telegram")
+        self.tg.send(f"✅ Switched to <b>coinswitch_live</b> ({self.cfg.symbol}).")
+        logger.info(f"Exchange switched to coinswitch_live, symbol={self.cfg.symbol}")
