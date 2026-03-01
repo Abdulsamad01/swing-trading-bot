@@ -658,22 +658,48 @@ class TradingBot:
         self.tg.send("✅ Profile switched to <b>ltf_15m</b>. Restart bot to apply.")
         logger.info("Profile switched to ltf_15m via Telegram")
 
+    def _switch_exchange(self, new_exchange: str, new_symbol: str):
+        """Switch exchange with verification. Reverts on failure."""
+        old_exchange = self.cfg.exchange
+        old_symbol = self.cfg.symbol
+        old_client = self.exchange
+
+        self.cfg.exchange = new_exchange
+        self.cfg.symbol = new_symbol
+        try:
+            self.exchange = self._build_exchange()
+        except Exception as e:
+            logger.error(f"Failed to build {new_exchange} client: {e}")
+            self.cfg.exchange = old_exchange
+            self.cfg.symbol = old_symbol
+            self.exchange = old_client
+            self.tg.send(f"❌ Switch failed: could not build client: {e}")
+            return
+
+        # Verify connectivity + set leverage
+        try:
+            ok = self.exchange.set_leverage(self.cfg.symbol, self.cfg.leverage)
+            if not ok:
+                raise RuntimeError("set_leverage returned False")
+        except Exception as e:
+            logger.error(f"Exchange verification failed for {new_exchange}: {e}")
+            self.cfg.exchange = old_exchange
+            self.cfg.symbol = old_symbol
+            self.exchange = old_client
+            self.tg.send(f"❌ Switch failed: verification error: {e}")
+            return
+
+        self.tg.send(f"✅ Switched to <b>{new_exchange}</b> ({new_symbol}).")
+        logger.info(f"Exchange switched to {new_exchange}, symbol={new_symbol}")
+
     def _cmd_demo(self, args):
         if self.state == BotState.OPEN:
             self.tg.send("❌ Cannot switch exchange while position is open.")
             return
-        self.cfg.exchange = "delta_demo"
-        self.cfg.symbol = self.cfg.demo_symbol
-        self.exchange = self._build_exchange()
-        self.tg.send(f"✅ Switched to <b>delta_demo</b> ({self.cfg.symbol}).")
-        logger.info(f"Exchange switched to delta_demo, symbol={self.cfg.symbol}")
+        self._switch_exchange("delta_demo", self.cfg.demo_symbol)
 
     def _cmd_live(self, args):
         if self.state == BotState.OPEN:
             self.tg.send("❌ Cannot switch exchange while position is open.")
             return
-        self.cfg.exchange = "coinswitch_live"
-        self.cfg.symbol = self.cfg.live_symbol
-        self.exchange = self._build_exchange()
-        self.tg.send(f"✅ Switched to <b>coinswitch_live</b> ({self.cfg.symbol}).")
-        logger.info(f"Exchange switched to coinswitch_live, symbol={self.cfg.symbol}")
+        self._switch_exchange("coinswitch_live", self.cfg.live_symbol)

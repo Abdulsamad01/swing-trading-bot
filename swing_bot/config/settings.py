@@ -163,9 +163,18 @@ def load_config() -> Config:
     if market_type != "futures":
         raise ValueError("MARKET_TYPE must be 'futures'")
 
-    demo_symbol = _get("DEMO_SYMBOL", "XRPUSD")
-    live_symbol = _get("LIVE_SYMBOL", "ADAUSDT")
-    symbol = demo_symbol if exchange == "delta_demo" else live_symbol
+    demo_symbol = (_get("DEMO_SYMBOL", "XRPUSD") or "").strip()
+    live_symbol = (_get("LIVE_SYMBOL", "ADAUSDT") or "").strip()
+    if not demo_symbol:
+        raise ValueError("DEMO_SYMBOL must not be empty")
+    if not live_symbol:
+        raise ValueError("LIVE_SYMBOL must not be empty")
+
+    legacy_symbol = _get("SYMBOL", None)
+    if legacy_symbol and legacy_symbol.strip():
+        symbol = legacy_symbol.strip()
+    else:
+        symbol = demo_symbol if exchange == "delta_demo" else live_symbol
 
     profile = _get("PROFILE", required=True)
     if profile not in ("ltf_5m", "ltf_15m"):
