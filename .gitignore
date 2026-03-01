@@ -11,3 +11,4 @@ build/
 .idea/
 .vscode/
 CHANGELOG_INTERNAL.md
+delta-bot-key.pem
