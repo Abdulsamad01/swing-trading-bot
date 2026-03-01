@@ -125,7 +125,7 @@ class TradingBot:
                         self._reconcile()
                         last_reconcile_ts = now_ts
                     except Exception as e:
-                        logger.exception("Inter-candle reconcile error")
+                        logger.exception(f"Inter-candle reconcile error: {e}")
                 time.sleep(5)
                 continue
 
@@ -141,10 +141,7 @@ class TradingBot:
 
             try:
                 self._run_cycle()
-            try:
-                self._run_cycle()
-                last_reconcile_ts = time.time()  # reset after full cycle
-            except Exception as e:
+                last_reconcile_ts = now_ts  # reset after full cycle
             except Exception as e:
                 logger.exception(f"Cycle error: {e}")
                 self.repo.log_event("ERROR", "cycle_error", str(e))

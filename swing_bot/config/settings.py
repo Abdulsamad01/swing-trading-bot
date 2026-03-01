@@ -210,6 +210,10 @@ def load_config() -> Config:
     coinswitch_tds = _getfloat("COINSWITCH_TDS_PERCENT", 1.00)
     coinswitch_total = _getfloat("COINSWITCH_TOTAL_COST_PERCENT", 1.20)
 
+    reconcile_interval = _getint("RECONCILE_INTERVAL_SECONDS", 30)
+    if reconcile_interval < 1:
+        raise ValueError("RECONCILE_INTERVAL_SECONDS must be >= 1")
+
     cfg = Config(
         environment=environment,
         exchange=exchange,
@@ -256,7 +260,7 @@ def load_config() -> Config:
         delta_demo_api_secret=delta_demo_api_secret,
         coinswitch_api_key=coinswitch_api_key,
         coinswitch_api_secret=coinswitch_api_secret,
-        reconcile_interval_seconds=_getint("RECONCILE_INTERVAL_SECONDS", 30),
+        reconcile_interval_seconds=reconcile_interval,
         trailing_sl_enabled=_getbool("TRAILING_SL_ENABLED", True),
         atr_trail_mult=_getfloat("ATR_TRAIL_MULT", 1.5),
         sqlite_path=sqlite_path,
