@@ -17,7 +17,7 @@ from urllib.parse import urlencode
 import requests
 
 from config.settings import Config
-from execution.base import ExchangeAdapter, OrderResult, PositionInfo
+from execution.base import ExchangeAdapter, OrderResult, OrderStatusInfo, PositionInfo
 from execution.retry import with_retry
 
 logger = logging.getLogger(__name__)
@@ -113,7 +113,7 @@ class CoinSwitchClient(ExchangeAdapter):
 
     # ------------------------------------------------------------ position
 
-    def get_position(self, symbol: str) -> PositionInfo:
+    def get_position(self, symbol: str) -> Optional[PositionInfo]:
         try:
             def _call():
                 return self._get("/pro/v1/futures/positions", {"symbol": symbol})
@@ -147,10 +147,47 @@ class CoinSwitchClient(ExchangeAdapter):
             )
         except Exception as e:
             logger.error(f"CoinSwitch: get_position failed: {e}")
-            return PositionInfo(
-                symbol=symbol, direction="flat", size=0,
-                entry_price=0, unrealized_pnl=0,
+            return None
+
+    def get_order_status(self, symbol: str, order_id: str) -> OrderStatusInfo:
+        try:
+            def _call():
+                return self._get("/pro/v1/futures/orders", {
+                    "symbol": symbol,
+                    "orderId": order_id,
+                })
+            resp = with_retry(
+                _call,
+                max_retries=self.cfg.max_retries,
+                base_delay=self.cfg.retry_base_delay_seconds,
+                jitter_percent=self.cfg.retry_jitter_percent,
+                label="coinswitch.get_order_status",
             )
+            data = resp.get("data", {})
+            if isinstance(data, list):
+                data = data[0] if data else {}
+            state = data.get("status", "").upper()
+            status_map = {
+                "NEW": "open",
+                "PARTIALLY_FILLED": "open",
+                "FILLED": "filled",
+                "CANCELED": "cancelled",
+                "CANCELLED": "cancelled",
+                "EXPIRED": "cancelled",
+            }
+            status = status_map.get(state, "unknown")
+            fill_price = None
+            if status == "filled":
+                fill_price = float(data.get("avgPrice") or 0) or None
+            return OrderStatusInfo(
+                order_id=order_id,
+                status=status,
+                fill_price=fill_price,
+                raw=data,
+            )
+        except Exception as e:
+            logger.error(f"CoinSwitch: get_order_status failed: {e}")
+            return OrderStatusInfo(order_id=order_id, status="unknown")
 
     # ------------------------------------------------------------ orders
 
@@ -297,6 +334,9 @@ class CoinSwitchClient(ExchangeAdapter):
 
     def close_position(self, symbol: str) -> OrderResult:
         pos = self.get_position(symbol)
+        if pos is None:
+            return OrderResult(success=False, order_id=None, filled_price=None,
+                               quantity=None, raw=None, error="position_query_failed")
         if pos.direction == "flat" or pos.size == 0:
             return OrderResult(success=True, order_id=None, filled_price=None,
                                quantity=0, raw=None, error="no_open_position")

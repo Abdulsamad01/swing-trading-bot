@@ -9,6 +9,14 @@ from typing import Optional
 
 
 @dataclass
+class OrderStatusInfo:
+    order_id: str
+    status: str             # 'open' | 'filled' | 'cancelled' | 'unknown'
+    fill_price: Optional[float] = None
+    raw: Optional[dict] = None
+
+
+@dataclass
 class OrderResult:
     success: bool
     order_id: Optional[str]
@@ -36,8 +44,13 @@ class ExchangeAdapter(ABC):
         ...
 
     @abstractmethod
-    def get_position(self, symbol: str) -> PositionInfo:
-        """Return current position for symbol. Returns flat PositionInfo if none."""
+    def get_position(self, symbol: str) -> Optional[PositionInfo]:
+        """Return current position for symbol. Returns flat PositionInfo if none, None on API error."""
+        ...
+
+    @abstractmethod
+    def get_order_status(self, symbol: str, order_id: str) -> OrderStatusInfo:
+        """Query status of an order by ID."""
         ...
 
     @abstractmethod

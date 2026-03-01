@@ -103,6 +103,10 @@ class Config:
     coinswitch_api_key: str = ""
     coinswitch_api_secret: str = ""
 
+    # --- Trailing SL ---
+    trailing_sl_enabled: bool = True
+    atr_trail_mult: float = 1.5
+
     # --- Storage ---
     sqlite_path: str = "swing_bot.db"
     log_level: str = "INFO"
@@ -249,6 +253,8 @@ def load_config() -> Config:
         delta_demo_api_secret=delta_demo_api_secret,
         coinswitch_api_key=coinswitch_api_key,
         coinswitch_api_secret=coinswitch_api_secret,
+        trailing_sl_enabled=_getbool("TRAILING_SL_ENABLED", True),
+        atr_trail_mult=_getfloat("ATR_TRAIL_MULT", 1.5),
         sqlite_path=sqlite_path,
         log_level=log_level,
     )
