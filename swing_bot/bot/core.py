@@ -125,7 +125,7 @@ class TradingBot:
                         self._reconcile()
                         last_reconcile_ts = now_ts
                     except Exception as e:
-                        logger.exception(f"Inter-candle reconcile error: {e}")
+                        logger.exception("Inter-candle reconcile error")
                 time.sleep(5)
                 continue
 
