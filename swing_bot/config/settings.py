@@ -51,6 +51,8 @@ class Config:
     exchange: str = ""              # delta_demo | coinswitch_live
     market_type: str = "futures"
     symbol: str = "ADAUSDT"
+    demo_symbol: str = "XRPUSD"
+    live_symbol: str = "ADAUSDT"
     profile: str = ""               # ltf_5m | ltf_15m
     leverage: int = 3
     use_fixed_capital: bool = True
@@ -161,9 +163,9 @@ def load_config() -> Config:
     if market_type != "futures":
         raise ValueError("MARKET_TYPE must be 'futures'")
 
-    symbol = _get("SYMBOL", "ADAUSDT")
-    if symbol != "ADAUSDT":
-        raise ValueError("SYMBOL must be 'ADAUSDT' in v1")
+    demo_symbol = _get("DEMO_SYMBOL", "XRPUSD")
+    live_symbol = _get("LIVE_SYMBOL", "ADAUSDT")
+    symbol = demo_symbol if exchange == "delta_demo" else live_symbol
 
     profile = _get("PROFILE", required=True)
     if profile not in ("ltf_5m", "ltf_15m"):
@@ -219,6 +221,8 @@ def load_config() -> Config:
         exchange=exchange,
         market_type=market_type,
         symbol=symbol,
+        demo_symbol=demo_symbol,
+        live_symbol=live_symbol,
         profile=profile,
         leverage=leverage,
         use_fixed_capital=use_fixed_capital,
