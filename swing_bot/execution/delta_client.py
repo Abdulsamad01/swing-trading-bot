@@ -15,7 +15,7 @@ from typing import Optional
 import requests
 
 from config.settings import Config
-from execution.base import ExchangeAdapter, OrderResult, PositionInfo
+from execution.base import ExchangeAdapter, OrderResult, OrderStatusInfo, PositionInfo
 from execution.retry import with_retry
 
 logger = logging.getLogger(__name__)
@@ -142,7 +142,7 @@ class DeltaClient(ExchangeAdapter):
 
     # ------------------------------------------------------------ position
 
-    def get_position(self, symbol: str) -> PositionInfo:
+    def get_position(self, symbol: str) -> Optional[PositionInfo]:
         product_id = self.get_product_id(symbol)
         try:
             def _call():
@@ -172,10 +172,42 @@ class DeltaClient(ExchangeAdapter):
             )
         except Exception as e:
             logger.error(f"Delta: get_position failed: {e}")
-            return PositionInfo(
-                symbol=symbol, direction="flat", size=0,
-                entry_price=0, unrealized_pnl=0,
+            return None
+
+    def get_order_status(self, symbol: str, order_id: str) -> OrderStatusInfo:
+        try:
+            def _call():
+                return self._get(f"/v2/orders/{order_id}")
+            resp = with_retry(
+                _call,
+                max_retries=self.cfg.max_retries,
+                base_delay=self.cfg.retry_base_delay_seconds,
+                jitter_percent=self.cfg.retry_jitter_percent,
+                label="delta.get_order_status",
             )
+            result = resp.get("result", {})
+            state = result.get("state", "").lower()
+            status_map = {
+                "open": "open",
+                "pending": "open",
+                "closed": "filled",
+                "filled": "filled",
+                "cancelled": "cancelled",
+                "canceled": "cancelled",
+            }
+            status = status_map.get(state, "unknown")
+            fill_price = None
+            if status == "filled":
+                fill_price = float(result.get("average_fill_price") or 0) or None
+            return OrderStatusInfo(
+                order_id=order_id,
+                status=status,
+                fill_price=fill_price,
+                raw=result,
+            )
+        except Exception as e:
+            logger.error(f"Delta: get_order_status failed: {e}")
+            return OrderStatusInfo(order_id=order_id, status="unknown")
 
     # ------------------------------------------------------------ orders
 
@@ -331,6 +363,9 @@ class DeltaClient(ExchangeAdapter):
 
     def close_position(self, symbol: str) -> OrderResult:
         pos = self.get_position(symbol)
+        if pos is None:
+            return OrderResult(success=False, order_id=None, filled_price=None,
+                               quantity=None, raw=None, error="position_query_failed")
         if pos.direction == "flat" or pos.size == 0:
             return OrderResult(success=True, order_id=None, filled_price=None,
                                quantity=0, raw=None, error="no_open_position")

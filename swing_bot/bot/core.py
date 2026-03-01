@@ -13,7 +13,7 @@ from typing import Optional
 
 from config.settings import Config
 from data.market_data import fetch_candles, build_htf_candles
-from execution.base import ExchangeAdapter, PositionInfo
+from execution.base import ExchangeAdapter, OrderStatusInfo, PositionInfo
 from execution.delta_client import DeltaClient
 from execution.coinswitch_client import CoinSwitchClient
 from strategy.bias_engine import compute_bias
@@ -48,6 +48,7 @@ class TradingBot:
         # Runtime position (loaded from DB on startup)
         self._open_trade_id: Optional[int] = None
         self._position: Optional[dict] = None  # local copy of open trade row
+        self._original_sl: Optional[float] = None  # for 1R breakeven calc
 
         self._register_commands()
 
@@ -151,6 +152,11 @@ class TradingBot:
             self._reconcile()
             if self.state != BotState.OPEN:
                 return  # position was closed, skip signal logic
+            # Manage trailing SL while position is open
+            if self.cfg.trailing_sl_enabled:
+                self._manage_trailing_sl()
+                if self.state != BotState.OPEN:
+                    return
 
         if self.state in (BotState.ERROR_PAUSED, BotState.PENDING_ENTRY, BotState.CLOSING):
             return
@@ -161,8 +167,13 @@ class TradingBot:
     # --------------------------------------------------------------- reconciliation
 
     def _reconcile(self):
-        """Query exchange. If flat while local=OPEN, mark closed."""
-        pos: PositionInfo = self.exchange.get_position(self.cfg.symbol)
+        """Query exchange. If flat while local=OPEN, mark closed with real fill data."""
+        pos = self.exchange.get_position(self.cfg.symbol)
+
+        if pos is None:
+            logger.warning("Reconcile: get_position returned None (API error). Skipping reconciliation.")
+            self.repo.log_event("WARNING", "reconcile_skip", "get_position API error, skipping reconcile")
+            return
 
         if pos.direction != "flat" and pos.size > 0:
             logger.debug(f"Reconcile: position still open size={pos.size}")
@@ -173,17 +184,60 @@ class TradingBot:
 
         if self._position and self._open_trade_id:
             entry_price = self._position.get("entry_price", 0)
-            exit_price = pos.entry_price if pos.entry_price else self._get_last_close_price()
             direction = self._position.get("direction", "long")
             quantity = self._position.get("quantity", 0)
             sl = self._position.get("stop_loss", 0)
             tp = self._position.get("take_profit", 0)
+            sl_order_id = self._position.get("sl_order_id")
+            tp_order_id = self._position.get("tp_order_id")
 
-            # Determine exit reason
-            if exit_price and tp and abs(exit_price - tp) < abs(exit_price - sl):
-                exit_reason = "tp_hit"
-            else:
-                exit_reason = "sl_hit"
+            exit_price = None
+            exit_reason = None
+
+            # Query SL order status
+            sl_status = None
+            if sl_order_id:
+                sl_status = self.exchange.get_order_status(self.cfg.symbol, sl_order_id)
+                if sl_status.status == "filled":
+                    exit_price = sl_status.fill_price
+                    exit_reason = "sl_hit"
+
+            # Query TP order status
+            tp_status = None
+            if tp_order_id:
+                tp_status = self.exchange.get_order_status(self.cfg.symbol, tp_order_id)
+                if tp_status.status == "filled":
+                    exit_price = tp_status.fill_price
+                    exit_reason = "tp_hit"
+
+            # Cancel orphaned counterpart order
+            if exit_reason == "sl_hit" and tp_order_id:
+                if tp_status and tp_status.status == "open":
+                    cancelled = self.exchange.cancel_order(self.cfg.symbol, tp_order_id)
+                    logger.info(f"Cancelled orphaned TP order {tp_order_id}: {cancelled}")
+            elif exit_reason == "tp_hit" and sl_order_id:
+                if sl_status and sl_status.status == "open":
+                    cancelled = self.exchange.cancel_order(self.cfg.symbol, sl_order_id)
+                    logger.info(f"Cancelled orphaned SL order {sl_order_id}: {cancelled}")
+            elif exit_reason is None:
+                # Both orders unknown status — cancel both to be safe, use proximity heuristic
+                if sl_order_id and sl_status and sl_status.status == "open":
+                    self.exchange.cancel_order(self.cfg.symbol, sl_order_id)
+                if tp_order_id and tp_status and tp_status.status == "open":
+                    self.exchange.cancel_order(self.cfg.symbol, tp_order_id)
+
+            # Fallback: proximity heuristic if order status didn't give us fill data
+            if exit_price is None:
+                fallback_price = self._get_last_close_price()
+                if fallback_price and tp and sl:
+                    if abs(fallback_price - tp) < abs(fallback_price - sl):
+                        exit_reason = "tp_hit"
+                    else:
+                        exit_reason = "sl_hit"
+                else:
+                    exit_reason = "unknown"
+                exit_price = fallback_price or entry_price
+                logger.warning(f"Reconcile: using fallback exit_price={exit_price}, reason={exit_reason}")
 
             # PnL calculation
             if direction == "long":
@@ -220,6 +274,7 @@ class TradingBot:
 
         self._open_trade_id = None
         self._position = None
+        self._original_sl = None
         self.state = BotState.IDLE
 
     def _get_last_close_price(self) -> float:
@@ -231,6 +286,121 @@ class TradingBot:
         except Exception:
             pass
         return 0.0
+
+    # --------------------------------------------------------------- trailing SL
+
+    def _manage_trailing_sl(self):
+        """ATR-based trailing stop-loss. Moves SL favorably after 1R profit."""
+        if not self._position or not self._open_trade_id:
+            return
+
+        direction = self._position.get("direction", "long")
+        entry_price = self._position.get("entry_price", 0)
+        current_sl = self._position.get("stop_loss", 0)
+        quantity = self._position.get("quantity", 0)
+        sl_order_id = self._position.get("sl_order_id")
+
+        if not entry_price or not current_sl:
+            return
+
+        # Store original SL on first call for 1R calculation
+        if self._original_sl is None:
+            self._original_sl = current_sl
+
+        # Fetch LTF candles to compute ATR
+        ltf_df = fetch_candles(self.cfg, self.cfg.ltf_interval)
+        if ltf_df is None or len(ltf_df) < self.cfg.atr_period + 1:
+            return
+
+        # Compute ATR(14)
+        df = ltf_df.copy()
+        df["prev_close"] = df["close"].shift(1)
+        df["tr"] = df[["high", "prev_close"]].max(axis=1) - df[["low", "prev_close"]].min(axis=1)
+        atr = df["tr"].iloc[-self.cfg.atr_period:].mean()
+
+        if atr <= 0:
+            return
+
+        current_price = df["close"].iloc[-1]
+
+        # Calculate 1R distance
+        risk_1r = abs(entry_price - self._original_sl)
+        if risk_1r == 0:
+            return
+
+        # Check if we've reached 1R profit
+        if direction == "long":
+            profit = current_price - entry_price
+            if profit < risk_1r:
+                return  # not yet at 1R, don't trail
+
+            # Trail: new_sl = price - ATR * mult, but at least breakeven
+            new_sl = current_price - atr * self.cfg.atr_trail_mult
+            new_sl = max(new_sl, entry_price)  # at least breakeven
+
+            # Only move SL up (favorably)
+            if new_sl <= current_sl:
+                return
+        else:  # short
+            profit = entry_price - current_price
+            if profit < risk_1r:
+                return
+
+            new_sl = current_price + atr * self.cfg.atr_trail_mult
+            new_sl = min(new_sl, entry_price)  # at least breakeven
+
+            # Only move SL down (favorably)
+            if new_sl >= current_sl:
+                return
+
+        new_sl = round(new_sl, 6)
+        logger.info(f"Trailing SL: moving from {current_sl} to {new_sl} (ATR={atr:.6f})")
+
+        # Cancel old SL order
+        if sl_order_id:
+            cancelled = self.exchange.cancel_order(self.cfg.symbol, sl_order_id)
+            if not cancelled:
+                logger.error(f"Failed to cancel old SL order {sl_order_id}")
+                return
+
+        # Place new SL order
+        sl_side = "sell" if direction == "long" else "buy"
+        new_sl_result = self.exchange.place_stop_order(
+            self.cfg.symbol, sl_side, quantity, new_sl, reduce_only=True
+        )
+
+        if not new_sl_result.success:
+            logger.critical(f"Trailing SL placement FAILED: {new_sl_result.error}")
+            self.tg.send_critical_alert(
+                f"TRAILING SL PLACEMENT FAILED!\n"
+                f"Old SL was cancelled but new SL failed.\n"
+                f"Error: {new_sl_result.error}\n"
+                f"MANUAL ACTION REQUIRED. Bot paused."
+            )
+            self.state = BotState.ERROR_PAUSED
+            self.repo.log_event("CRITICAL", "trailing_sl_failed",
+                                f"SL placement failed after cancel: {new_sl_result.error}")
+            return
+
+        # Update DB and local state
+        self.repo.update_trade(self._open_trade_id, {
+            "stop_loss": new_sl,
+            "sl_order_id": new_sl_result.order_id,
+        })
+        self._position["stop_loss"] = new_sl
+        self._position["sl_order_id"] = new_sl_result.order_id
+
+        self.tg.send(
+            f"📐 <b>Trailing SL adjusted</b>\n"
+            f"Old SL: <code>{current_sl:.6f}</code>\n"
+            f"New SL: <code>{new_sl:.6f}</code>\n"
+            f"ATR: <code>{atr:.6f}</code>\n"
+            f"Price: <code>{current_price:.6f}</code>"
+        )
+
+        self.repo.log_event("INFO", "trailing_sl_moved",
+                            f"SL moved from {current_sl} to {new_sl}",
+                            {"old_sl": current_sl, "new_sl": new_sl, "atr": atr})
 
     # --------------------------------------------------------------- signal + entry
 
@@ -352,6 +522,7 @@ class TradingBot:
         trade_id = self.repo.insert_trade(trade_row)
         self._open_trade_id = trade_id
         self._position = {**trade_row, "id": trade_id}
+        self._original_sl = signal.stop_loss
         self.state = BotState.OPEN
 
         # 5. Send entry alert
@@ -394,12 +565,15 @@ class TradingBot:
         pos = None
         if self._position:
             exchange_pos = self.exchange.get_position(self.cfg.symbol)
-            pos = {
-                "direction": exchange_pos.direction,
-                "size": exchange_pos.size,
-                "entry_price": exchange_pos.entry_price,
-                "unrealized_pnl": exchange_pos.unrealized_pnl,
-            }
+            if exchange_pos is not None:
+                pos = {
+                    "direction": exchange_pos.direction,
+                    "size": exchange_pos.size,
+                    "entry_price": exchange_pos.entry_price,
+                    "unrealized_pnl": exchange_pos.unrealized_pnl,
+                }
+            else:
+                pos = {"direction": "unknown", "size": 0, "entry_price": 0, "unrealized_pnl": 0}
         self.tg.send_status(
             state=self.state,
             profile=self.cfg.profile,
