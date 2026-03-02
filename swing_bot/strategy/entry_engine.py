@@ -69,6 +69,7 @@ def find_displacement(
     atr: pd.Series,
     bias: Bias,
     displacement_mult: float,
+    lookback: int = 50,
 ) -> Optional[int]:
     """
     Find the most recent displacement candle aligned with bias.
@@ -82,8 +83,8 @@ def find_displacement(
     body = (df["close"] - df["open"]).abs()
     threshold = atr * displacement_mult
 
-    # Look back last 50 bars (not including the very last partially-formed one)
-    lookback = min(50, len(df) - 1)
+    # Look back last N bars (not including the very last partially-formed one)
+    lookback = min(lookback, len(df) - 1)
     candidates = df.index[-(lookback):-1]  # exclude last (current forming) bar
 
     result_idx = None
@@ -161,7 +162,10 @@ def _resolve_session_rr(cfg: Config, now_utc: datetime) -> Optional[float]:
     t = now_utc.strftime("%H:%M")
 
     def in_window(start: str, end: str) -> bool:
-        return start <= t < end
+        if start <= end:
+            return start <= t < end
+        # Window crosses midnight (e.g. 23:00 -> 01:00)
+        return t >= start or t < end
 
     in_overlap = in_window(cfg.overlap_start_utc, cfg.overlap_end_utc)
     in_ny = in_window(cfg.ny_peak_start_utc, cfg.ny_peak_end_utc)
@@ -215,7 +219,7 @@ def build_signal(
     atr = compute_atr(ltf_df, cfg.atr_period)
 
     # Find displacement
-    disp_idx = find_displacement(ltf_df, atr, bias, cfg.displacement_mult)
+    disp_idx = find_displacement(ltf_df, atr, bias, cfg.displacement_mult, cfg.displacement_lookback)
     if disp_idx is None:
         logger.debug("No signal: no displacement candle found")
         return None

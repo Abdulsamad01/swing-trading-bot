@@ -8,9 +8,11 @@ Auth: HMAC-SHA256 signature on each request.
 
 import hashlib
 import hmac
+import json
 import logging
 import time
 from typing import Optional
+from urllib.parse import urlencode
 
 import requests
 
@@ -65,11 +67,9 @@ class DeltaClient(ExchangeAdapter):
         }
 
     def _get(self, path: str, params: dict = None) -> dict:
-        import json
         url = self.base_url + path
         query = ""
         if params:
-            from urllib.parse import urlencode
             query = "?" + urlencode(params)
         headers = self._headers("GET", path + query)
         resp = requests.get(url, params=params, headers=headers, timeout=10)
@@ -77,7 +77,6 @@ class DeltaClient(ExchangeAdapter):
         return resp.json()
 
     def _post(self, path: str, body: dict) -> dict:
-        import json
         payload = json.dumps(body)
         headers = self._headers("POST", path, payload)
         url = self.base_url + path
@@ -86,7 +85,6 @@ class DeltaClient(ExchangeAdapter):
         return resp.json()
 
     def _delete(self, path: str, body: dict = None) -> dict:
-        import json
         payload = json.dumps(body) if body else ""
         headers = self._headers("DELETE", path, payload)
         url = self.base_url + path
@@ -100,7 +98,15 @@ class DeltaClient(ExchangeAdapter):
         if symbol in self._product_cache:
             return self._product_cache[symbol]
         try:
-            data = self._get("/v2/products", params={"contract_type": "perpetual_futures"})
+            def _call():
+                return self._get("/v2/products", params={"contract_type": "perpetual_futures"})
+            data = with_retry(
+                _call,
+                max_retries=self.cfg.max_retries,
+                base_delay=self.cfg.retry_base_delay_seconds,
+                jitter_percent=self.cfg.retry_jitter_percent,
+                label="delta.get_product_id",
+            )
             products = data.get("result", [])
             for product in products:
                 if product.get("symbol") == symbol:
@@ -117,7 +123,7 @@ class DeltaClient(ExchangeAdapter):
             )
             return None
         except Exception as e:
-            logger.error(f"Delta: get_product_id failed: {e}")
+            logger.error(f"Delta: get_product_id failed after retries: {e}")
             return None
 
     # ------------------------------------------------------------ leverage
