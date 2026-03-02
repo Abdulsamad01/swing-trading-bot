@@ -15,7 +15,7 @@ Stage 6 is mandatory. No idea goes from backtest directly to CoinSwitch.
 
 ### High Priority (V1 refinements)
 - ADA killzone optimisation: Are NY hours actually the best for ADA? Needs empirical testing
-- XRP news filter: Build a simple filter that pauses XRP trading 30min around announcements
+- XRP news filter: Build a simple filter that pauses XRP trading 30 min around announcements
 - OB visit count threshold: Does 1-visit vs 2-visit OB perform better for ADA vs XRP?
 - Funding rate as signal: High positive funding = fade the longs? Test this as a confluence filter
 
@@ -31,7 +31,8 @@ Stage 6 is mandatory. No idea goes from backtest directly to CoinSwitch.
 - Label methodology: What's the best way to label "profitable at 2R" for altcoin futures?
 
 ## Research Log Format
-```
+
+```text
 Idea: [Concept]
 Asset: [ADA / XRP / Both]
 Date Started: [Date]

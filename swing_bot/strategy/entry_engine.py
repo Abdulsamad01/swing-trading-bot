@@ -85,6 +85,8 @@ def find_displacement(
 
     # Look back last N bars (not including the very last partially-formed one)
     lookback = min(lookback, len(df) - 1)
+    if lookback <= 0:
+        return None
     candidates = df.index[-(lookback):-1]  # exclude last (current forming) bar
 
     result_idx = None
@@ -161,11 +163,17 @@ def _resolve_session_rr(cfg: Config, now_utc: datetime) -> Optional[float]:
     """
     t = now_utc.strftime("%H:%M")
 
+    def _to_minutes(time_str: str) -> int:
+        parts = time_str.split(":")
+        return int(parts[0]) * 60 + int(parts[1])
+
     def in_window(start: str, end: str) -> bool:
-        if start <= end:
-            return start <= t < end
-        # Window crosses midnight (e.g. 23:00 -> 01:00)
-        return t >= start or t < end
+        t_min = _to_minutes(t)
+        start_min = _to_minutes(start)
+        end_min = _to_minutes(end)
+        if start_min <= end_min:
+            return start_min <= t_min < end_min
+        return t_min >= start_min or t_min < end_min
 
     in_overlap = in_window(cfg.overlap_start_utc, cfg.overlap_end_utc)
     in_ny = in_window(cfg.ny_peak_start_utc, cfg.ny_peak_end_utc)

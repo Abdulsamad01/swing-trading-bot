@@ -122,9 +122,9 @@ def fetch_delta_candles(
 
         data = with_retry(
             _call,
-            max_retries=2,
-            base_delay=1.0,
-            jitter_percent=20.0,
+            max_retries=cfg.max_retries,
+            base_delay=cfg.retry_base_delay_seconds,
+            jitter_percent=cfg.retry_jitter_percent,
             label="delta.fetch_candles",
         )
 
@@ -147,6 +147,7 @@ def fetch_delta_candles(
 
 
 def fetch_binance_candles(
+    cfg: Config,
     symbol: str,
     interval: str,
     limit: int = 300,
@@ -175,9 +176,9 @@ def fetch_binance_candles(
 
         raw = with_retry(
             _call,
-            max_retries=2,
-            base_delay=1.0,
-            jitter_percent=20.0,
+            max_retries=cfg.max_retries,
+            base_delay=cfg.retry_base_delay_seconds,
+            jitter_percent=cfg.retry_jitter_percent,
             label="binance.fetch_candles",
         )
 
@@ -211,7 +212,7 @@ def fetch_candles(cfg: Config, interval: str) -> Optional[pd.DataFrame]:
     logger.warning(
         f"Primary data source failed for {interval}. Falling back to Binance USD-M futures."
     )
-    df = fetch_binance_candles(cfg.symbol, interval, limit)
+    df = fetch_binance_candles(cfg, cfg.symbol, interval, limit)
     if df is not None and not df.empty:
         return df
 

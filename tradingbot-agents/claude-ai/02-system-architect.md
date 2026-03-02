@@ -50,7 +50,7 @@ V3 (Research — after V2 stable)
 - Flag any component that assumes BTC/ETH-style liquidity (ADA/XRP are less liquid)
 
 ## ADA/XRP Specific Architecture Notes
-- ADA: 6 decimal places precision. Minimum tick size ~0.0001
+- ADA: 4 decimal places precision. Minimum tick size ~0.0001
 - XRP: 4 decimal places precision. Minimum tick size ~0.0001
 - Both are highly correlated with BTC during risk-off events — consider adding BTC regime filter
 - XRP volume spikes are often news-driven — WebSocket feed must handle sudden volatility jumps

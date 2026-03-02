@@ -8,13 +8,16 @@ Complete agent setup for your ADA and XRP trading bot running on
 ## Quick Setup
 
 ### Step 1 — Copy agents into your trading bot project
+
 ```bash
-cp -r agents/ /path/to/your/tradingbot/
+cp -r tradingbot-agents/claude-ai/ /path/to/your/tradingbot/tradingbot-agents/claude-ai/
+cp -r tradingbot-agents/claude-code/ /path/to/your/tradingbot/tradingbot-agents/claude-code/
 cp scripts/agents.sh /path/to/your/tradingbot/scripts/
 cp config/.env.example /path/to/your/tradingbot/config/
 ```
 
 ### Step 2 — Load the agent switcher
+
 ```bash
 cd /path/to/your/tradingbot
 source scripts/agents.sh
@@ -22,7 +25,9 @@ agent-list   # see all available agents
 ```
 
 ### Step 3 — Set up Claude.ai Projects (7 agents)
-For each file in `agents/claude-ai/`:
+
+For each file in `tradingbot-agents/claude-ai/`:
+
 1. Go to **claude.ai → Projects → New Project**
 2. Name it exactly as shown below
 3. Paste the entire file contents as the **System Prompt**
@@ -38,18 +43,19 @@ For each file in `agents/claude-ai/`:
 | 07-research.md | Research — Trading Bot |
 
 ### Step 4 — Configure your .env files
+
 ```bash
 # Delta Exchange (ADA validation)
 cp config/.env.example config/delta.env
-# Edit delta.env: set EXCHANGE=delta, TRADING_PAIR=ADAUSD, INSTANCE_MODE=validation
+# Edit delta.env: set EXCHANGE=delta_demo, DEMO_SYMBOL=XRPUSD, ENVIRONMENT=demo
 
 # CoinSwitch ADA (live)
 cp config/.env.example config/coinswitch-ada.env
-# Edit: set EXCHANGE=coinswitch, TRADING_PAIR=ADAUSDT, INSTANCE_MODE=live
+# Edit: set EXCHANGE=coinswitch_live, LIVE_SYMBOL=ADAUSDT, ENVIRONMENT=live
 
 # CoinSwitch XRP (live)
 cp config/.env.example config/coinswitch-xrp.env
-# Edit: set EXCHANGE=coinswitch, TRADING_PAIR=XRPUSDT, INSTANCE_MODE=live
+# Edit: set EXCHANGE=coinswitch_live, LIVE_SYMBOL=XRPUSDT, ENVIRONMENT=live
 ```
 
 ---
@@ -57,6 +63,7 @@ cp config/.env.example config/coinswitch-xrp.env
 ## Agent Usage
 
 ### In Claude Code (terminal)
+
 ```bash
 # Switch agent based on what you're working on
 agent-strategy   # Writing OB/FVG/liquidity detection code
@@ -68,7 +75,9 @@ agent-ml         # V2 ML work (only after V1 profitable 3+ months)
 ```
 
 ### In Claude.ai Projects
+
 Open the relevant project and start chatting — the system prompt handles the context:
+
 - **PM** → planning features, sprint breakdown, Delta→CoinSwitch decision gates
 - **Architect** → system design, exchange adapter design, V2 planning
 - **Strategy** → ICT/SMC concept to code translation, ADA/XRP specific rules
@@ -78,8 +87,10 @@ Open the relevant project and start chatting — the system prompt handles the c
 - **Research** → new setup ideas, kill/continue research decisions
 
 ### In Antigravity (with awesome-skills installed)
+
 Combine your CLAUDE.md with Antigravity skills:
-```
+
+```text
 # After running: agent-strategy
 @senior-architect review the market structure detection for XRP
 @test-driven-development write tests for ADA order block detection
@@ -94,14 +105,15 @@ Combine your CLAUDE.md with Antigravity skills:
 |---|---|---|
 | Purpose | ADA Validation | ADA + XRP Live |
 | ADA Pair | ADAUSD | ADAUSDT |
-| XRP Pair | ❌ Not available | XRPUSDT |
+| XRP Pair | N/A | XRPUSDT |
 | Margin Type | Inverse (USD) | Linear (USDT) |
 | Position Sizing | Complex (inverse formula) | Simple (USDT / risk_per_unit) |
 
 ---
 
 ## Deployment Flow
-```
+
+```text
 Backtest (ADA/XRP data)
     ↓
 Delta Exchange — ADAUSD live validation (min 2 weeks)

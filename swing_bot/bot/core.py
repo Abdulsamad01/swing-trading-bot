@@ -268,10 +268,10 @@ class TradingBot:
                     exit_reason = "unknown"
                 exit_price = fallback_price or entry_price
                 logger.warning(
-                    f"Reconcile: using proximity heuristic. "
-                    f"exit_price={exit_price}, reason={exit_reason}, "
-                    f"sl_status={sl_status.status if sl_status else 'N/A'}, "
-                    f"tp_status={tp_status.status if tp_status else 'N/A'}"
+                    "Reconcile: using proximity heuristic. exit_price=%s, reason=%s, sl_status=%s, tp_status=%s",
+                    exit_price, exit_reason,
+                    sl_status.status if sl_status else "N/A",
+                    tp_status.status if tp_status else "N/A",
                 )
 
             # PnL calculation
@@ -405,13 +405,13 @@ class TradingBot:
         )
 
         if not new_sl_result.success:
-            logger.critical(f"Trailing SL placement FAILED: {new_sl_result.error}. Attempting to restore old SL.")
+            logger.critical("Trailing SL placement FAILED: %s. Attempting to restore old SL.", new_sl_result.error)
             # Attempt to restore old SL to avoid unguarded position
             restore_result = self.exchange.place_stop_order(
                 self.cfg.symbol, sl_side, quantity, current_sl, reduce_only=True
             )
             if restore_result.success:
-                logger.info(f"Restored old SL at {current_sl}, order_id={restore_result.order_id}")
+                logger.info("Restored old SL at %s, order_id=%s", current_sl, restore_result.order_id)
                 self.repo.update_trade(self._open_trade_id, {
                     "sl_order_id": restore_result.order_id,
                 })
@@ -638,6 +638,7 @@ class TradingBot:
         )
 
     def _cmd_trades(self, args):
+        MAX_LIMIT = 100
         limit = 10
         if args:
             try:
@@ -645,6 +646,9 @@ class TradingBot:
                 if limit < 1:
                     limit = 10
                     self.tg.send("⚠️ Invalid limit (must be >= 1). Using default 10.")
+                elif limit > MAX_LIMIT:
+                    limit = MAX_LIMIT
+                    self.tg.send(f"⚠️ Limit capped at maximum {MAX_LIMIT}.")
             except ValueError:
                 self.tg.send(f"⚠️ Invalid argument '{args[0]}'. Expected a number. Using default 10.")
         trades = self.repo.get_recent_trades(limit)

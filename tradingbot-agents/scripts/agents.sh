@@ -3,47 +3,65 @@
 # Usage: source scripts/agents.sh
 #        Then type an agent name to switch
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/agents/claude-code"
+# Guard: must be sourced, not executed directly
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    echo "Error: This script must be sourced: source scripts/agents.sh" >&2
+    exit 1
+fi
+
+AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/claude-code"
+
+# ── Helper ───────────────────────────────────────────────────────────────────
+
+safe_copy() {
+    local src="$1"
+    if cp "$src" ./CLAUDE.md 2>/dev/null; then
+        return 0
+    else
+        echo "❌ Failed to copy $src to ./CLAUDE.md" >&2
+        return 1
+    fi
+}
 
 # ── Claude Code Agent Switcher ─────────────────────────────────────────────────
 
 agent-backend() {
-    cp "$AGENTS_DIR/backend.md" ./CLAUDE.md
+    safe_copy "$AGENTS_DIR/backend.md" && \
     echo "✅ Backend Execution Agent — Delta Exchange (ADAUSD) + CoinSwitch (ADAUSDT/XRPUSDT)"
 }
 
 agent-strategy() {
-    cp "$AGENTS_DIR/strategy.md" ./CLAUDE.md
+    safe_copy "$AGENTS_DIR/strategy.md" && \
     echo "✅ ICT/SMC Strategy Agent — ADA & XRP calibrated"
 }
 
 agent-data() {
-    cp "$AGENTS_DIR/data-engineering.md" ./CLAUDE.md
+    safe_copy "$AGENTS_DIR/data-engineering.md" && \
     echo "✅ Data Engineering Agent — Delta + CoinSwitch feeds"
 }
 
 agent-backtest() {
-    cp "$AGENTS_DIR/backtesting.md" ./CLAUDE.md
+    safe_copy "$AGENTS_DIR/backtesting.md" && \
     echo "✅ Backtesting Agent — ADA/XRP specific validation"
 }
 
 agent-devops() {
-    cp "$AGENTS_DIR/devops.md" ./CLAUDE.md
+    safe_copy "$AGENTS_DIR/devops.md" && \
     echo "✅ DevOps Agent — multi-instance deployment"
 }
 
 agent-ml() {
-    cp "$AGENTS_DIR/ml-model.md" ./CLAUDE.md
+    safe_copy "$AGENTS_DIR/ml-model.md" && \
     echo "✅ ML Model Agent (V2) — ADA + XRP separate models"
 }
 
 agent-review() {
-    cp "$AGENTS_DIR/code-review.md" ./CLAUDE.md
+    safe_copy "$AGENTS_DIR/code-review.md" && \
     echo "✅ Code Review Agent — exchange-aware financial safety checks"
 }
 
 agent-monitor() {
-    cp "$AGENTS_DIR/monitoring.md" ./CLAUDE.md
+    safe_copy "$AGENTS_DIR/monitoring.md" && \
     echo "✅ Monitoring Agent — Delta + CoinSwitch dashboards"
 }
 
@@ -73,13 +91,13 @@ agent-list() {
     echo "  agent-list       Show this list"
     echo ""
     echo "Claude.ai Projects (paste contents into each project):"
-    echo "  agents/claude-ai/01-project-manager.md"
-    echo "  agents/claude-ai/02-system-architect.md"
-    echo "  agents/claude-ai/03-ict-smc-strategy.md"
-    echo "  agents/claude-ai/04-risk-manager.md"
-    echo "  agents/claude-ai/05-quant-analyst.md"
-    echo "  agents/claude-ai/06-security.md"
-    echo "  agents/claude-ai/07-research.md"
+    echo "  tradingbot-agents/claude-ai/01-project-manager.md"
+    echo "  tradingbot-agents/claude-ai/02-system-architect.md"
+    echo "  tradingbot-agents/claude-ai/03-ict-smc-strategy.md"
+    echo "  tradingbot-agents/claude-ai/04-risk-manager.md"
+    echo "  tradingbot-agents/claude-ai/05-quant-analyst.md"
+    echo "  tradingbot-agents/claude-ai/06-security.md"
+    echo "  tradingbot-agents/claude-ai/07-research.md"
     echo ""
 }
 

@@ -69,6 +69,8 @@ xrp_engine  = StrategyEngine(asset="XRP", config=ASSETS["XRP"])
 def validate_signal(signal: TradeSignal, asset: str) -> bool:
     if asset == "XRP" and not news_filter_clear():
         return False
+    if calculate_atr_ratio(signal, asset) < Decimal("0.5"):
+        return False  # reject low-ATR signals early
     if signal.risk_reward < Decimal("2.0"):
         return False
     if not in_valid_killzone(asset):

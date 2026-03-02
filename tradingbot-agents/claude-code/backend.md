@@ -8,10 +8,11 @@ Delta Exchange (paper — ADAUSD) and CoinSwitch Pro (live — ADAUSDT, XRPUSDT)
 ## Exchange Adapters You Own
 
 ### Delta Exchange (Paper/Validation)
+
 ```python
-# Delta Exchange API details
-BASE_URL = "https://api.delta.exchange"
-WS_URL   = "wss://socket.delta.exchange"
+# Delta Exchange API details (India region — matches delta_client.py)
+BASE_URL = "https://cdn-ind.testnet.deltaex.org"   # demo/testnet
+LIVE_URL = "https://api.india.delta.exchange"       # live
 PAIR     = "ADAUSD"       # USD-margined inverse perpetual
 MARGIN_TYPE = "inverse"   # Position size in USD notional
 MIN_ORDER_SIZE = 1        # 1 USD minimum (verify current Delta docs)

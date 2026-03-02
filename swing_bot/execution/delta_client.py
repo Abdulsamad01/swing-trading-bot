@@ -122,8 +122,8 @@ class DeltaClient(ExchangeAdapter):
                 f"Available perpetual futures ({len(available)}): {', '.join(available)}"
             )
             return None
-        except Exception as e:
-            logger.error(f"Delta: get_product_id failed after retries: {e}")
+        except Exception:
+            logger.exception("Delta: get_product_id failed after retries")
             return None
 
     # ------------------------------------------------------------ leverage
@@ -158,6 +158,9 @@ class DeltaClient(ExchangeAdapter):
 
     def get_position(self, symbol: str) -> Optional[PositionInfo]:
         product_id = self.get_product_id(symbol)
+        if not product_id:
+            logger.error("Delta: get_position aborted — get_product_id returned None for %s", symbol)
+            return None
         try:
             def _call():
                 return self._get("/v2/positions", params={"product_id": product_id})
@@ -360,6 +363,9 @@ class DeltaClient(ExchangeAdapter):
 
     def cancel_order(self, symbol: str, order_id: str) -> bool:
         product_id = self.get_product_id(symbol)
+        if not product_id:
+            logger.error("Delta: cancel_order aborted — get_product_id returned None for %s", symbol)
+            return False
         try:
             def _call():
                 return self._delete(f"/v2/orders/{order_id}", {"product_id": int(product_id)})
