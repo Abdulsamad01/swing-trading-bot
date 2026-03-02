@@ -21,11 +21,8 @@ from config.settings import Config
 
 logger = logging.getLogger(__name__)
 
-# INR/USDT approximate conversion (used only for sizing balance conversion)
-# In v1 we treat 1000 INR as ~12 USDT at ~83 INR/USDT.
-# This is updated at startup and stored in config if needed.
-# For now use a reasonable default; operator can override via env.
-INR_TO_USDT_RATE = 0.012  # 1 INR ≈ 0.012 USDT (i.e. ~83 INR per USDT)
+# INR/USDT conversion rate is now configurable via INR_TO_USDT_RATE env var.
+# Default: 0.012 (1 INR ≈ 0.012 USDT, i.e. ~83 INR per USDT)
 
 
 @dataclass
@@ -68,8 +65,8 @@ def compute_sizing(
     if sl_distance <= 0:
         raise ValueError(f"sl_distance must be > 0, got {sl_distance}")
 
-    sizing_balance_inr = cfg.fixed_capital_inr  # always 1000 in v1
-    sizing_balance_usdt = sizing_balance_inr * INR_TO_USDT_RATE
+    sizing_balance_inr = cfg.fixed_capital_inr
+    sizing_balance_usdt = sizing_balance_inr * cfg.inr_to_usdt_rate
 
     risk_budget_usdt = sizing_balance_usdt * cfg.leverage * (cfg.risk_per_trade_percent / 100.0)
 

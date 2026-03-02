@@ -70,13 +70,19 @@ class BacktestResult:
     avg_rr: float = 0.0
 
 
+def _in_window(t: str, start: str, end: str) -> bool:
+    if start <= end:
+        return start <= t < end
+    return t >= start or t < end
+
+
 def _resolve_session(cfg: Config, dt: datetime) -> str:
     t = dt.strftime("%H:%M")
-    if cfg.overlap_start_utc <= t < cfg.overlap_end_utc:
+    if _in_window(t, cfg.overlap_start_utc, cfg.overlap_end_utc):
         return "overlap"
-    if cfg.ny_peak_start_utc <= t < cfg.ny_peak_end_utc:
+    if _in_window(t, cfg.ny_peak_start_utc, cfg.ny_peak_end_utc):
         return "ny"
-    if cfg.london_peak_start_utc <= t < cfg.london_peak_end_utc:
+    if _in_window(t, cfg.london_peak_start_utc, cfg.london_peak_end_utc):
         return "london"
     return "outside"
 

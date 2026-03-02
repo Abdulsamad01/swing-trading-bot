@@ -58,6 +58,7 @@ class Config:
     use_fixed_capital: bool = True
     fixed_capital_inr: float = 1000.0
     risk_per_trade_percent: float = 2.0
+    inr_to_usdt_rate: float = 0.012
 
     # --- Session RR (UTC) ---
     london_peak_start_utc: str = "07:00"
@@ -80,6 +81,7 @@ class Config:
     displacement_mult_15m: float = 1.5
     max_fvg_age_5m: int = 24
     max_fvg_age_15m: int = 20
+    displacement_lookback: int = 50
 
     # --- Fees ---
     delta_maker_fee_percent: float = 0.05
@@ -181,20 +183,22 @@ def load_config() -> Config:
         raise ValueError(f"PROFILE must be 'ltf_5m' or 'ltf_15m', got: {profile!r}")
 
     leverage = _getint("LEVERAGE", 3)
-    if leverage != 3:
-        raise ValueError("LEVERAGE must be 3 in v1")
+    if leverage < 1 or leverage > 20:
+        raise ValueError(f"LEVERAGE must be between 1 and 20, got: {leverage}")
 
     use_fixed_capital = _getbool("USE_FIXED_CAPITAL", True)
-    if not use_fixed_capital:
-        raise ValueError("USE_FIXED_CAPITAL must be true in v1")
 
     fixed_capital_inr = _getfloat("FIXED_CAPITAL_INR", 1000.0)
-    if fixed_capital_inr != 1000.0:
-        raise ValueError("FIXED_CAPITAL_INR must be 1000 in v1")
+    if fixed_capital_inr <= 0:
+        raise ValueError(f"FIXED_CAPITAL_INR must be > 0, got: {fixed_capital_inr}")
 
     risk_per_trade_percent = _getfloat("RISK_PER_TRADE_PERCENT", 2.0)
     if risk_per_trade_percent <= 0:
         raise ValueError("RISK_PER_TRADE_PERCENT must be > 0")
+
+    inr_to_usdt_rate = _getfloat("INR_TO_USDT_RATE", 0.012)
+    if inr_to_usdt_rate <= 0:
+        raise ValueError(f"INR_TO_USDT_RATE must be > 0, got: {inr_to_usdt_rate}")
 
     # Secrets validation
     telegram_bot_token = _get("TELEGRAM_BOT_TOKEN", required=True)
@@ -237,6 +241,7 @@ def load_config() -> Config:
         use_fixed_capital=use_fixed_capital,
         fixed_capital_inr=fixed_capital_inr,
         risk_per_trade_percent=risk_per_trade_percent,
+        inr_to_usdt_rate=inr_to_usdt_rate,
         london_peak_start_utc=_get("LONDON_PEAK_START_UTC", "07:00"),
         london_peak_end_utc=_get("LONDON_PEAK_END_UTC", "10:00"),
         overlap_start_utc=_get("OVERLAP_START_UTC", "13:00"),
@@ -255,6 +260,7 @@ def load_config() -> Config:
         displacement_mult_15m=_getfloat("DISPLACEMENT_MULT_15M", 1.5),
         max_fvg_age_5m=_getint("MAX_FVG_AGE_5M", 24),
         max_fvg_age_15m=_getint("MAX_FVG_AGE_15M", 20),
+        displacement_lookback=_getint("DISPLACEMENT_LOOKBACK", 50),
         delta_maker_fee_percent=_getfloat("DELTA_MAKER_FEE_PERCENT", 0.05),
         delta_taker_fee_percent=_getfloat("DELTA_TAKER_FEE_PERCENT", 0.02),
         coinswitch_trading_fee_percent=coinswitch_trading_fee,

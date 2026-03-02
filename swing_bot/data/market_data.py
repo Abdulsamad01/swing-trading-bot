@@ -17,6 +17,7 @@ import pandas as pd
 import requests
 
 from config.settings import Config
+from execution.retry import with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -114,11 +115,19 @@ def fetch_delta_candles(
     }
 
     try:
-        resp = requests.get(url, params=params, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
+        def _call():
+            resp = requests.get(url, params=params, timeout=10)
+            resp.raise_for_status()
+            return resp.json()
 
-        # Delta returns {"success": true, "result": [...]}
+        data = with_retry(
+            _call,
+            max_retries=2,
+            base_delay=1.0,
+            jitter_percent=20.0,
+            label="delta.fetch_candles",
+        )
+
         if not data.get("success"):
             logger.warning(f"Delta candles API returned success=false: {data}")
             return None
@@ -132,8 +141,8 @@ def fetch_delta_candles(
         logger.debug(f"Delta candles fetched: {len(df)} bars [{interval}]")
         return df
 
-    except requests.RequestException as e:
-        logger.warning(f"Delta candle fetch failed: {e}")
+    except Exception as e:
+        logger.warning(f"Delta candle fetch failed after retries: {e}")
         return None
 
 
@@ -159,9 +168,18 @@ def fetch_binance_candles(
     }
 
     try:
-        resp = requests.get(url, params=params, timeout=10)
-        resp.raise_for_status()
-        raw = resp.json()
+        def _call():
+            resp = requests.get(url, params=params, timeout=10)
+            resp.raise_for_status()
+            return resp.json()
+
+        raw = with_retry(
+            _call,
+            max_retries=2,
+            base_delay=1.0,
+            jitter_percent=20.0,
+            label="binance.fetch_candles",
+        )
 
         if not raw:
             logger.warning("Binance futures candles returned empty")
@@ -171,8 +189,8 @@ def fetch_binance_candles(
         logger.debug(f"Binance futures candles fetched: {len(df)} bars [{interval}]")
         return df
 
-    except requests.RequestException as e:
-        logger.warning(f"Binance fallback candle fetch failed: {e}")
+    except Exception as e:
+        logger.warning(f"Binance fallback candle fetch failed after retries: {e}")
         return None
 
 

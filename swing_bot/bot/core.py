@@ -241,18 +241,38 @@ class TradingBot:
                 if tp_order_id and tp_status and tp_status.status == "open":
                     self.exchange.cancel_order(self.cfg.symbol, tp_order_id)
 
-            # Fallback: proximity heuristic if order status didn't give us fill data
+            # Fallback: re-query order statuses once more before proximity heuristic
+            if exit_price is None:
+                if sl_order_id and (sl_status is None or sl_status.status == "unknown"):
+                    sl_status = self.exchange.get_order_status(self.cfg.symbol, sl_order_id)
+                    if sl_status.status == "filled":
+                        exit_price = sl_status.fill_price
+                        exit_reason = "sl_hit"
+                if exit_price is None and tp_order_id and (tp_status is None or tp_status.status == "unknown"):
+                    tp_status = self.exchange.get_order_status(self.cfg.symbol, tp_order_id)
+                    if tp_status.status == "filled":
+                        exit_price = tp_status.fill_price
+                        exit_reason = "tp_hit"
+
+            # Last resort: proximity heuristic
             if exit_price is None:
                 fallback_price = self._get_last_close_price()
                 if fallback_price and tp and sl:
-                    if abs(fallback_price - tp) < abs(fallback_price - sl):
+                    dist_tp = abs(fallback_price - tp)
+                    dist_sl = abs(fallback_price - sl)
+                    if dist_tp < dist_sl:
                         exit_reason = "tp_hit"
                     else:
                         exit_reason = "sl_hit"
                 else:
                     exit_reason = "unknown"
                 exit_price = fallback_price or entry_price
-                logger.warning(f"Reconcile: using fallback exit_price={exit_price}, reason={exit_reason}")
+                logger.warning(
+                    f"Reconcile: using proximity heuristic. "
+                    f"exit_price={exit_price}, reason={exit_reason}, "
+                    f"sl_status={sl_status.status if sl_status else 'N/A'}, "
+                    f"tp_status={tp_status.status if tp_status else 'N/A'}"
+                )
 
             # PnL calculation
             if direction == "long":
@@ -385,16 +405,35 @@ class TradingBot:
         )
 
         if not new_sl_result.success:
-            logger.critical(f"Trailing SL placement FAILED: {new_sl_result.error}")
+            logger.critical(f"Trailing SL placement FAILED: {new_sl_result.error}. Attempting to restore old SL.")
+            # Attempt to restore old SL to avoid unguarded position
+            restore_result = self.exchange.place_stop_order(
+                self.cfg.symbol, sl_side, quantity, current_sl, reduce_only=True
+            )
+            if restore_result.success:
+                logger.info(f"Restored old SL at {current_sl}, order_id={restore_result.order_id}")
+                self.repo.update_trade(self._open_trade_id, {
+                    "sl_order_id": restore_result.order_id,
+                })
+                self._position["sl_order_id"] = restore_result.order_id
+                self.tg.send_error_alert(
+                    f"Trailing SL move failed but old SL restored at {current_sl}.\n"
+                    f"Error: {new_sl_result.error}"
+                )
+                self.repo.log_event("WARNING", "trailing_sl_restore",
+                                    f"New SL failed, restored old SL at {current_sl}")
+                return
+            # Both new and restore failed — position is unguarded
+            logger.critical("Failed to restore old SL. Position is UNGUARDED.")
             self.tg.send_critical_alert(
                 f"TRAILING SL PLACEMENT FAILED!\n"
-                f"Old SL was cancelled but new SL failed.\n"
+                f"Old SL was cancelled and restore also failed.\n"
                 f"Error: {new_sl_result.error}\n"
                 f"MANUAL ACTION REQUIRED. Bot paused."
             )
             self.state = BotState.ERROR_PAUSED
             self.repo.log_event("CRITICAL", "trailing_sl_failed",
-                                f"SL placement failed after cancel: {new_sl_result.error}")
+                                f"SL placement and restore both failed: {new_sl_result.error}")
             return
 
         # Update DB and local state
@@ -603,8 +642,11 @@ class TradingBot:
         if args:
             try:
                 limit = int(args[0])
+                if limit < 1:
+                    limit = 10
+                    self.tg.send("⚠️ Invalid limit (must be >= 1). Using default 10.")
             except ValueError:
-                pass
+                self.tg.send(f"⚠️ Invalid argument '{args[0]}'. Expected a number. Using default 10.")
         trades = self.repo.get_recent_trades(limit)
         self.tg.send_trades_summary(trades)
 
