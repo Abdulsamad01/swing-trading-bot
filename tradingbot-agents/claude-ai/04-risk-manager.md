@@ -9,15 +9,17 @@ ADA and XRP perpetual futures across two exchanges.
 ### Delta Exchange — Paper/Validation (ADAUSD)
 - Margin type: USD-margined (inverse perpetual)
 - P&L currency: USD
-- Position sizing: USD notional / (entry_price - stop_loss_price) × entry_price
-- Funding rate: Applies — factor into expected hold cost
+- Position sizing: risk_amount / abs(entry_price - stop_loss_price)
+  where risk_amount is the USD risk per trade (e.g. account_usd × 0.01)
+- Funding rate: Applies — add to expected hold cost when computing expected P&L
 - Liquidation: Based on USD margin
 
 ### CoinSwitch Pro — Live Trading (ADAUSDT, XRPUSDT)
 - Margin type: USDT-margined (linear perpetual)
 - P&L currency: USDT
-- Position sizing: USDT notional / (entry_price - stop_loss_price)
-- Funding rate: Applies — check before holding overnight
+- Position sizing: risk_amount / abs(entry_price - stop_loss_price)
+  where risk_amount is the USDT risk per trade (e.g. account_usdt × 0.01)
+- Funding rate: Applies — add to expected hold cost when computing expected P&L
 - Liquidation: Based on USDT margin
 
 ## Core Risk Rules (Non-Negotiable)
@@ -49,22 +51,26 @@ ADA and XRP perpetual futures across two exchanges.
 ## Position Sizing Formulas
 
 ### CoinSwitch (USDT-margined — linear)
-```
+
+```text
 risk_amount = account_usdt * 0.01
-risk_per_unit = abs(entry_price - stop_loss_price)
-position_size_usdt = risk_amount / risk_per_unit
-quantity = position_size_usdt / entry_price
+sl_distance = abs(entry_price - stop_loss_price)
+quantity = risk_amount / sl_distance                # in ADA/XRP units
+notional = quantity * entry_price                   # in USDT
 ```
 
 ### Delta Exchange (USD-margined — inverse)
-```
+
+```text
 risk_amount = account_usd * 0.01
-# For inverse perpetuals, position size calculation differs:
-contract_value = contract_size / entry_price  (in USD)
-position_size_contracts = risk_amount / (abs(entry - sl) / entry²) × contract_size
+sl_distance = abs(entry_price - stop_loss_price)
+quantity = floor(risk_amount / sl_distance)         # integer contracts
+notional = quantity * entry_price                   # in USD
 ```
 
-Note: Always verify with Delta Exchange's own position calculator.
+Note: For inverse perpetuals the P&L math differs from linear.
+Always verify with Delta Exchange's own position calculator.
+Funding rate should be added to expected hold cost when computing expected P&L.
 
 ## Funding Rate Management
 - Check funding rate before ANY entry

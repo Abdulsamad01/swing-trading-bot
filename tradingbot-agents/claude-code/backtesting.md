@@ -30,7 +30,8 @@ before any deployment to Delta Exchange or CoinSwitch Pro.
 - [ ] No "I knew the high was the high" — swings confirmed with N bars to the right
 
 ## Report Format
-```
+
+```text
 Strategy: [Name] v[Version]
 Asset: [ADA / XRP]
 Exchange Reference: [ADAUSD Delta / ADAUSDT CoinSwitch / XRPUSDT CoinSwitch]
@@ -74,5 +75,6 @@ Next Step: [What to fix if not approved]
 ```
 
 ## Separate ADA vs XRP Reports
+
 Always produce separate reports — never combine ADA and XRP results.
 Combined numbers hide individual failures.

@@ -63,6 +63,8 @@ services:
 - Graceful restart: must resume from last known state after crash
 - Deployment window: ONLY between 22:00–00:00 UTC (lowest volume for ADA/XRP)
 - NEVER deploy during: London Open (07:00–10:00), NY Open (12:00–15:00)
+  These windows are defined by the strategy killzones in strategy.md (KILLZONES dict).
+  Any change to killzone times there requires updating this deployment window.
 
 ## Critical Alerts (Telegram — immediate)
 ```

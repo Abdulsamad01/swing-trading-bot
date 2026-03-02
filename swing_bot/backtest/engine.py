@@ -70,10 +70,18 @@ class BacktestResult:
     avg_rr: float = 0.0
 
 
+def _to_minutes(time_str: str) -> int:
+    parts = time_str.split(":")
+    return int(parts[0]) * 60 + int(parts[1])
+
+
 def _in_window(t: str, start: str, end: str) -> bool:
-    if start <= end:
-        return start <= t < end
-    return t >= start or t < end
+    t_min = _to_minutes(t)
+    start_min = _to_minutes(start)
+    end_min = _to_minutes(end)
+    if start_min <= end_min:
+        return start_min <= t_min < end_min
+    return t_min >= start_min or t_min < end_min
 
 
 def _resolve_session(cfg: Config, dt: datetime) -> str:

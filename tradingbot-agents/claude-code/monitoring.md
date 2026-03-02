@@ -23,7 +23,8 @@ and CoinSwitch Pro (ADA + XRP live).
 - XRP news filter: operational? (important)
 
 ## Grafana Dashboard Layout
-```
+
+```text
 Row 1 — Live Status
   ├── CoinSwitch ADA bot: [ACTIVE / PAUSED / HALTED]
   ├── CoinSwitch XRP bot: [ACTIVE / PAUSED / HALTED]

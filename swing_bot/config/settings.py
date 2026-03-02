@@ -229,6 +229,10 @@ def load_config() -> Config:
     if reconcile_interval < 1:
         raise ValueError("RECONCILE_INTERVAL_SECONDS must be >= 1")
 
+    displacement_lookback_val = _getint("DISPLACEMENT_LOOKBACK", 50)
+    if displacement_lookback_val <= 0:
+        raise ValueError(f"DISPLACEMENT_LOOKBACK must be a positive integer, got: {displacement_lookback_val}")
+
     cfg = Config(
         environment=environment,
         exchange=exchange,
@@ -260,7 +264,7 @@ def load_config() -> Config:
         displacement_mult_15m=_getfloat("DISPLACEMENT_MULT_15M", 1.5),
         max_fvg_age_5m=_getint("MAX_FVG_AGE_5M", 24),
         max_fvg_age_15m=_getint("MAX_FVG_AGE_15M", 20),
-        displacement_lookback=_getint("DISPLACEMENT_LOOKBACK", 50),
+        displacement_lookback=displacement_lookback_val,
         delta_maker_fee_percent=_getfloat("DELTA_MAKER_FEE_PERCENT", 0.05),
         delta_taker_fee_percent=_getfloat("DELTA_TAKER_FEE_PERCENT", 0.02),
         coinswitch_trading_fee_percent=coinswitch_trading_fee,

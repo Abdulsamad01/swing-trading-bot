@@ -1,12 +1,16 @@
 # ML Model Agent (V2) — CLAUDE.md
+
 # Usage: cp this file to ./CLAUDE.md in project root
+
 # NOTE: This is V2 — only activate after V1 is profitable for 3+ months
 
 ## Role
+
 ML engineer building a signal filter for ADA and XRP ICT/SMC signals.
 The model's job: predict which V1 setups have the highest win probability.
 
 ## V2 Readiness Gate
+
 Before writing any ML code, confirm all are true:
 - [ ] V1 is live and profitable on CoinSwitch for 3+ months
 - [ ] Minimum 300 labelled ADA signals available
@@ -17,6 +21,7 @@ Before writing any ML code, confirm all are true:
 If any are false → return to V1 development.
 
 ## Separate Models Per Asset
+
 ```python
 # ADA model: trained on ADA signals only
 ada_signal_filter = XGBClassifier(...)
@@ -31,6 +36,7 @@ xrp_signal_filter.fit(X_xrp, y_xrp)
 ```
 
 ## ADA-Specific Features
+
 ```python
 ADA_FEATURES = [
     "htf_bias",               # 4H structure: 1=LONG, -1=SHORT
@@ -52,6 +58,7 @@ ADA_FEATURES = [
 ```
 
 ## XRP-Specific Features (ADA features + these)
+
 ```python
 XRP_EXTRA_FEATURES = [
     "news_flag",              # XRP news in last 2h: 1=yes, 0=no
@@ -62,6 +69,7 @@ XRP_EXTRA_FEATURES = [
 ```
 
 ## Training Standards
+
 - Walk-forward validation only (no random splits — time dependency)
 - Max 15 features per model (prevent overfitting — altcoin data is noisier)
 - Minimum out-of-sample AUC: 0.58 (lower threshold for altcoins than BTC)
@@ -69,6 +77,7 @@ XRP_EXTRA_FEATURES = [
 - Compare shadow mode predictions vs actual outcomes before going live
 
 ## Deployment Gate (Shadow → Live)
+
 - Shadow mode accuracy > 60% on Delta Exchange live signals
 - Would-approve rate between 40–80% (if filtering everything or nothing → problem)
 - Manual review of 20 approved vs 20 rejected signals — do they make sense?

@@ -1,13 +1,16 @@
 # Data Engineering Agent — CLAUDE.md
+
 # Usage: cp this file to ./CLAUDE.md in project root
 
 ## Role
+
 Senior data engineer managing market data pipelines for ADA and XRP
 across Delta Exchange (ADAUSD) and CoinSwitch Pro (ADAUSDT, XRPUSDT).
 
 ## Data Sources
 
 ### Delta Exchange (Paper/Validation)
+
 ```python
 # Delta WebSocket candle stream
 DELTA_WS  = "wss://socket.delta.exchange"
@@ -36,6 +39,7 @@ GET https://api.delta.exchange/v2/history/candles
 ```
 
 ### CoinSwitch Pro (Live)
+
 ```python
 # CoinSwitch WebSocket (verify current endpoint in CoinSwitch Pro docs)
 COINSWITCH_WS = "wss://ws.coinswitch.co"  # verify current endpoint
@@ -47,6 +51,7 @@ GET /api/v1/futures/funding-rate?symbol=XRPUSDT
 ```
 
 ## Asset Precision Reference
+
 ```python
 PRECISION = {
     "ADAUSD":  {"price": 4, "qty_step": 1},    # Delta — qty in USD contracts
@@ -59,7 +64,9 @@ PRECISION = {
 ```
 
 ## ICT Features to Pre-Compute (V2 ML Prep)
+
 Store these alongside each signal for future ML training:
+
 ```python
 ADA_FEATURES = {
     "htf_bias",               # 4H structure direction
@@ -82,6 +89,7 @@ XRP_FEATURES = ADA_FEATURES | {
 ```
 
 ## Data Quality Rules
+
 - Gap detection: alert if any candle gap > 1 bar (missed candle = missed signal)
 - Timezone: ALL timestamps stored in UTC — no exceptions
 - Delta ADAUSD vs CoinSwitch ADAUSDT: store separately, never mix
@@ -89,6 +97,7 @@ XRP_FEATURES = ADA_FEATURES | {
 - Outlier detection: reject candles where high - low > 10 × average_range
 
 ## Pipeline Standards
+
 - Idempotent: re-running pipeline produces same result
 - Separate databases/tables for Delta and CoinSwitch data
 - Never backfill missing bars with interpolation — mark as NULL and alert
