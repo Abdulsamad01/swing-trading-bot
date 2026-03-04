@@ -12,3 +12,5 @@ build/
 .vscode/
 CHANGELOG_INTERNAL.md
 delta-bot-key.pem
+.agent/
+tradingbot-agents/
