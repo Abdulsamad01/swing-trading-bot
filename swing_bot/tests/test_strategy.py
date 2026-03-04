@@ -37,15 +37,26 @@ def make_df(closes, highs=None, lows=None, opens=None):
 # ------------------------------------------------------------------ bias tests
 
 def test_bias_bullish():
-    # Create clear higher highs and higher lows
-    closes = list(range(100, 160))
+    # Need actual swing structure: pivots require local peaks/valleys
+    # Pattern: valley-peak repeated, with each peak higher and each valley higher
+    # left_bars=3, right_bars=3 → each pivot needs 3 bars lower on each side
+    closes = (
+        [100, 101, 102, 103, 102, 101, 100]    # pivot high at 103, pivot low at 100
+        + [101, 102, 103, 106, 103, 102, 101]  # pivot high at 106 (HH), pivot low at 101 (HL)
+        + [102, 103, 104, 109, 104, 103, 102]  # pivot high at 109 (HH), pivot low at 102 (HL)
+    )
     df = make_df(closes)
     bias = compute_bias(df, left_bars=3, right_bars=3)
     assert bias == "bullish"
 
 
 def test_bias_bearish():
-    closes = list(range(160, 100, -1))
+    # Pattern: peak-valley repeated, with each peak lower and each valley lower
+    closes = (
+        [109, 108, 107, 106, 107, 108, 109]    # pivot low at 106, pivot high at 109
+        + [108, 107, 106, 103, 106, 107, 108]  # pivot low at 103 (LL), pivot high at 108 (LH)
+        + [107, 106, 105, 100, 105, 106, 107]  # pivot low at 100 (LL), pivot high at 107 (LH)
+    )
     df = make_df(closes)
     bias = compute_bias(df, left_bars=3, right_bars=3)
     assert bias == "bearish"
@@ -99,6 +110,7 @@ class MockCfg:
     leverage = 3
     risk_per_trade_percent = 2.0
     fixed_capital_inr = 1000.0
+    inr_to_usdt_rate = 0.012
     delta_taker_fee_percent = 0.02
     coinswitch_total_cost_percent = 1.20
 

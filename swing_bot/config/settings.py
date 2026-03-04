@@ -48,7 +48,7 @@ def _getbool(key: str, default: bool = False) -> bool:
 class Config:
     # --- Core ---
     environment: str = ""           # demo | live
-    exchange: str = ""              # delta_demo | coinswitch_live
+    exchange: str = ""              # delta_demo | binance_testnet | coinswitch_live
     market_type: str = "futures"
     symbol: str = "ADAUSDT"
     demo_symbol: str = "XRPUSD"
@@ -86,9 +86,16 @@ class Config:
     # --- Fees ---
     delta_maker_fee_percent: float = 0.05
     delta_taker_fee_percent: float = 0.02
+    binance_maker_fee_percent: float = 0.02
+    binance_taker_fee_percent: float = 0.04
     coinswitch_trading_fee_percent: float = 0.20
     coinswitch_tds_percent: float = 1.00
     coinswitch_total_cost_percent: float = 1.20
+
+    # --- Base URLs ---
+    delta_demo_base_url: str = "https://cdn-ind.testnet.deltaex.org"
+    delta_live_base_url: str = "https://api.india.delta.exchange"
+    binance_testnet_base_url: str = "https://demo-fapi.binance.com"
 
     # --- Data & Runtime ---
     data_source_primary: str = "exchange_futures"
@@ -104,6 +111,8 @@ class Config:
     telegram_chat_id: str = ""
     delta_demo_api_key: str = ""
     delta_demo_api_secret: str = ""
+    binance_testnet_api_key: str = ""
+    binance_testnet_api_secret: str = ""
     coinswitch_api_key: str = ""
     coinswitch_api_secret: str = ""
 
@@ -147,6 +156,8 @@ class Config:
         """Return effective total cost percent based on active exchange."""
         if self.exchange == "delta_demo":
             return self.delta_taker_fee_percent * 2  # entry + exit taker
+        if self.exchange == "binance_testnet":
+            return self.binance_taker_fee_percent * 2  # entry + exit taker
         return self.coinswitch_total_cost_percent
 
 
@@ -158,8 +169,8 @@ def load_config() -> Config:
         raise ValueError(f"ENVIRONMENT must be 'demo' or 'live', got: {environment!r}")
 
     exchange = _get("EXCHANGE", required=True)
-    if exchange not in ("delta_demo", "coinswitch_live"):
-        raise ValueError(f"EXCHANGE must be 'delta_demo' or 'coinswitch_live', got: {exchange!r}")
+    if exchange not in ("delta_demo", "binance_testnet", "coinswitch_live"):
+        raise ValueError(f"EXCHANGE must be 'delta_demo', 'binance_testnet', or 'coinswitch_live', got: {exchange!r}")
 
     market_type = _get("MARKET_TYPE", "futures")
     if market_type != "futures":
@@ -176,7 +187,7 @@ def load_config() -> Config:
     if legacy_symbol and legacy_symbol.strip():
         symbol = legacy_symbol.strip()
     else:
-        symbol = demo_symbol if exchange == "delta_demo" else live_symbol
+        symbol = demo_symbol if exchange in ("delta_demo", "binance_testnet") else live_symbol
 
     profile = _get("PROFILE", required=True)
     if profile not in ("ltf_5m", "ltf_15m"):
@@ -206,12 +217,17 @@ def load_config() -> Config:
 
     delta_demo_api_key = _get("DELTA_DEMO_API_KEY", "")
     delta_demo_api_secret = _get("DELTA_DEMO_API_SECRET", "")
+    binance_testnet_api_key = _get("BINANCE_TESTNET_API_KEY", "")
+    binance_testnet_api_secret = _get("BINANCE_TESTNET_API_SECRET", "")
     coinswitch_api_key = _get("COINSWITCH_API_KEY", "")
     coinswitch_api_secret = _get("COINSWITCH_API_SECRET", "")
 
     if exchange == "delta_demo":
         if not delta_demo_api_key or not delta_demo_api_secret:
             raise ValueError("DELTA_DEMO_API_KEY and DELTA_DEMO_API_SECRET are required for delta_demo exchange")
+    if exchange == "binance_testnet":
+        if not binance_testnet_api_key or not binance_testnet_api_secret:
+            raise ValueError("BINANCE_TESTNET_API_KEY and BINANCE_TESTNET_API_SECRET are required for binance_testnet exchange")
     if exchange == "coinswitch_live":
         if not coinswitch_api_key or not coinswitch_api_secret:
             raise ValueError("COINSWITCH_API_KEY and COINSWITCH_API_SECRET are required for coinswitch_live exchange")
@@ -267,9 +283,14 @@ def load_config() -> Config:
         displacement_lookback=displacement_lookback_val,
         delta_maker_fee_percent=_getfloat("DELTA_MAKER_FEE_PERCENT", 0.05),
         delta_taker_fee_percent=_getfloat("DELTA_TAKER_FEE_PERCENT", 0.02),
+        binance_maker_fee_percent=_getfloat("BINANCE_MAKER_FEE_PERCENT", 0.02),
+        binance_taker_fee_percent=_getfloat("BINANCE_TAKER_FEE_PERCENT", 0.04),
         coinswitch_trading_fee_percent=coinswitch_trading_fee,
         coinswitch_tds_percent=coinswitch_tds,
         coinswitch_total_cost_percent=coinswitch_total,
+        delta_demo_base_url=_get("DELTA_DEMO_BASE_URL", "https://cdn-ind.testnet.deltaex.org"),
+        delta_live_base_url=_get("DELTA_LIVE_BASE_URL", "https://api.india.delta.exchange"),
+        binance_testnet_base_url=_get("BINANCE_TESTNET_BASE_URL", "https://demo-fapi.binance.com"),
         data_source_primary=_get("DATA_SOURCE_PRIMARY", "exchange_futures"),
         data_source_fallback=_get("DATA_SOURCE_FALLBACK", "binance_usdm_futures"),
         candle_limit=_getint("CANDLE_LIMIT", 300),
@@ -281,6 +302,8 @@ def load_config() -> Config:
         telegram_chat_id=telegram_chat_id,
         delta_demo_api_key=delta_demo_api_key,
         delta_demo_api_secret=delta_demo_api_secret,
+        binance_testnet_api_key=binance_testnet_api_key,
+        binance_testnet_api_secret=binance_testnet_api_secret,
         coinswitch_api_key=coinswitch_api_key,
         coinswitch_api_secret=coinswitch_api_secret,
         reconcile_interval_seconds=reconcile_interval,

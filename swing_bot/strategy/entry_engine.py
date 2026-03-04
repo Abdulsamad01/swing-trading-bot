@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
-import numpy as np
 import pandas as pd
 
 from config.settings import Config

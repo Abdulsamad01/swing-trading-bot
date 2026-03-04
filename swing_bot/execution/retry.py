@@ -8,6 +8,8 @@ import random
 import time
 from typing import Callable, TypeVar
 
+import requests
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
@@ -43,7 +45,7 @@ def with_retry(
     for attempt in range(max_retries + 1):
         try:
             return fn()
-        except Exception as e:
+        except requests.RequestException as e:
             last_exc = e
             if attempt == max_retries:
                 logger.error(f"[{label}] Failed after {max_retries + 1} attempts: {e}")

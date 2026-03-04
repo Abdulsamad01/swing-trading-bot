@@ -16,6 +16,7 @@ Formulas:
 import logging
 import math
 from dataclasses import dataclass
+from decimal import Decimal
 
 from config.settings import Config
 
@@ -75,8 +76,11 @@ def compute_sizing(
         quantity = math.floor(risk_budget_usdt / sl_distance)
         quantity = max(quantity, 1)
     else:
-        # CoinSwitch uses decimal quantity
-        quantity = risk_budget_usdt / sl_distance
+        # CoinSwitch uses decimal quantity — use Decimal to avoid
+        # floating-point imprecision at tick-size/lot-size boundaries
+        d_budget = Decimal(str(risk_budget_usdt))
+        d_sl = Decimal(str(sl_distance))
+        quantity = float(d_budget / d_sl)
 
     notional_usdt = entry_price * quantity
     margin_usdt = notional_usdt / cfg.leverage
