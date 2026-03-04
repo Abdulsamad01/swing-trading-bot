@@ -14,3 +14,5 @@ CHANGELOG_INTERNAL.md
 delta-bot-key.pem
 .agent/
 tradingbot-agents/
+flake8_output.txt
+pylint_output.txt
