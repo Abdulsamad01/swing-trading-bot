@@ -21,10 +21,6 @@ from execution.retry import with_retry
 
 logger = logging.getLogger(__name__)
 
-# Delta Exchange India base URLs
-DELTA_DEMO_BASE = "https://cdn-ind.testnet.deltaex.org"
-DELTA_LIVE_BASE = "https://api.india.delta.exchange"
-
 # Binance USD-M futures fallback
 BINANCE_FUTURES_BASE = "https://fapi.binance.com"
 
@@ -98,7 +94,7 @@ def fetch_delta_candles(
     Fetch futures OHLCV candles from Delta Exchange India.
     Uses demo or live base URL based on exchange config.
     """
-    base = DELTA_DEMO_BASE if cfg.exchange == "delta_demo" else DELTA_LIVE_BASE
+    base = cfg.delta_demo_base_url if cfg.exchange == "delta_demo" else cfg.delta_live_base_url
     delta_interval = DELTA_INTERVAL_MAP.get(interval)
     if not delta_interval:
         logger.error(f"Unsupported Delta interval: {interval}")
@@ -199,22 +195,37 @@ def fetch_candles(cfg: Config, interval: str) -> Optional[pd.DataFrame]:
     """
     Fetch candles with primary -> fallback logic.
     Always futures. Never spot.
+    When exchange is binance_testnet, use Binance as primary (testnet uses live market data).
     Logs a warning in events if fallback is used.
     """
     limit = cfg.candle_limit
 
-    # Primary: Delta Exchange India
-    df = fetch_delta_candles(cfg, interval, limit)
-    if df is not None and not df.empty:
-        return df
+    if cfg.exchange == "binance_testnet":
+        # Binance testnet: use Binance live market data as primary
+        df = fetch_binance_candles(cfg, cfg.symbol, interval, limit)
+        if df is not None and not df.empty:
+            return df
 
-    # Fallback: Binance USD-M futures
-    logger.warning(
-        f"Primary data source failed for {interval}. Falling back to Binance USD-M futures."
-    )
-    df = fetch_binance_candles(cfg, cfg.symbol, interval, limit)
-    if df is not None and not df.empty:
-        return df
+        # Fallback: Delta Exchange India
+        logger.warning(
+            f"Binance primary data source failed for {interval}. Falling back to Delta."
+        )
+        df = fetch_delta_candles(cfg, interval, limit)
+        if df is not None and not df.empty:
+            return df
+    else:
+        # Default: Delta Exchange India as primary
+        df = fetch_delta_candles(cfg, interval, limit)
+        if df is not None and not df.empty:
+            return df
+
+        # Fallback: Binance USD-M futures
+        logger.warning(
+            f"Primary data source failed for {interval}. Falling back to Binance USD-M futures."
+        )
+        df = fetch_binance_candles(cfg, cfg.symbol, interval, limit)
+        if df is not None and not df.empty:
+            return df
 
     logger.error(f"Both primary and fallback data sources failed for {interval}.")
     return None

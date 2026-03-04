@@ -11,10 +11,13 @@ import time
 from datetime import datetime, timezone
 from typing import Optional
 
+import pandas as pd
+
 from config.settings import Config
 from data.market_data import fetch_candles, build_htf_candles
 from execution.base import ExchangeAdapter, OrderStatusInfo, PositionInfo
 from execution.delta_client import DeltaClient
+from execution.binance_client import BinanceClient
 from execution.coinswitch_client import CoinSwitchClient
 from strategy.bias_engine import compute_bias
 from strategy.entry_engine import build_signal, Signal
@@ -49,6 +52,7 @@ class TradingBot:
         self._open_trade_id: Optional[int] = None
         self._position: Optional[dict] = None  # local copy of open trade row
         self._original_sl: Optional[float] = None  # for 1R breakeven calc
+        self._cycle_ltf_df: Optional["pd.DataFrame"] = None  # cached per cycle
 
         self._register_commands()
 
@@ -57,6 +61,8 @@ class TradingBot:
     def _build_exchange(self) -> ExchangeAdapter:
         if self.cfg.exchange == "delta_demo":
             return DeltaClient(self.cfg)
+        elif self.cfg.exchange == "binance_testnet":
+            return BinanceClient(self.cfg)
         return CoinSwitchClient(self.cfg)
 
     def _register_commands(self):
@@ -162,22 +168,28 @@ class TradingBot:
         now_utc = datetime.now(timezone.utc)
         logger.info(f"Cycle at {now_utc.strftime('%Y-%m-%d %H:%M:%S')} UTC | state={self.state}")
 
-        # Always reconcile first
-        if self.state == BotState.OPEN:
-            self._reconcile()
-            if self.state != BotState.OPEN:
-                return  # position was closed, skip signal logic
-            # Manage trailing SL while position is open
-            if self.cfg.trailing_sl_enabled:
-                self._manage_trailing_sl()
+        # Fetch LTF candles once per cycle — reused by trailing SL and signal logic
+        self._cycle_ltf_df = fetch_candles(self.cfg, self.cfg.ltf_interval)
+
+        try:
+            # Always reconcile first
+            if self.state == BotState.OPEN:
+                self._reconcile()
                 if self.state != BotState.OPEN:
-                    return
+                    return  # position was closed, skip signal logic
+                # Manage trailing SL while position is open
+                if self.cfg.trailing_sl_enabled:
+                    self._manage_trailing_sl()
+                    if self.state != BotState.OPEN:
+                        return
 
-        if self.state in (BotState.ERROR_PAUSED, BotState.PENDING_ENTRY, BotState.CLOSING):
-            return
+            if self.state in (BotState.ERROR_PAUSED, BotState.PENDING_ENTRY, BotState.CLOSING):
+                return
 
-        if self.state == BotState.IDLE:
-            self._signal_and_enter(now_utc)
+            if self.state == BotState.IDLE:
+                self._signal_and_enter(now_utc)
+        finally:
+            self._cycle_ltf_df = None
 
     # --------------------------------------------------------------- reconciliation
 
@@ -261,9 +273,9 @@ class TradingBot:
                     dist_tp = abs(fallback_price - tp)
                     dist_sl = abs(fallback_price - sl)
                     if dist_tp < dist_sl:
-                        exit_reason = "tp_hit"
+                        exit_reason = "assumed_tp"
                     else:
-                        exit_reason = "sl_hit"
+                        exit_reason = "assumed_sl"
                 else:
                     exit_reason = "unknown"
                 exit_price = fallback_price or entry_price
@@ -342,8 +354,8 @@ class TradingBot:
         if self._original_sl is None:
             self._original_sl = current_sl
 
-        # Fetch LTF candles to compute ATR
-        ltf_df = fetch_candles(self.cfg, self.cfg.ltf_interval)
+        # Use cycle-cached LTF candles to compute ATR
+        ltf_df = self._cycle_ltf_df
         if ltf_df is None or len(ltf_df) < self.cfg.atr_period + 1:
             return
 
@@ -459,8 +471,8 @@ class TradingBot:
     # --------------------------------------------------------------- signal + entry
 
     def _signal_and_enter(self, now_utc: datetime):
-        # 1. Fetch candles
-        ltf_df = fetch_candles(self.cfg, self.cfg.ltf_interval)
+        # 1. Use cycle-cached LTF candles
+        ltf_df = self._cycle_ltf_df
         if ltf_df is None or ltf_df.empty:
             logger.warning("No LTF candles available. Skipping cycle.")
             self.repo.log_event("WARNING", "data_unavailable", "LTF candles unavailable")
@@ -742,7 +754,7 @@ class TradingBot:
         if self.state == BotState.OPEN:
             self.tg.send("❌ Cannot switch exchange while position is open.")
             return
-        self._switch_exchange("delta_demo", self.cfg.demo_symbol)
+        self._switch_exchange("binance_testnet", self.cfg.demo_symbol)
 
     def _cmd_live(self, args):
         if self.state == BotState.OPEN:

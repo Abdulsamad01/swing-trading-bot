@@ -8,7 +8,7 @@ SL/TP checked on each subsequent bar's high/low.
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import List, Optional
 
 import pandas as pd
@@ -110,7 +110,6 @@ def _simulate_exit(
     for i in range(entry_bar + 1, len(ltf_df)):
         high = ltf_df["high"].iloc[i]
         low = ltf_df["low"].iloc[i]
-        close = ltf_df["close"].iloc[i]
         bars_held = i - entry_bar
 
         if direction == "long":
@@ -161,6 +160,14 @@ def run_backtest(
     n = len(ltf_df)
     logger.info(f"Backtest started: run_id={run_id} bars={n} profile={cfg.profile}")
 
+    # Pre-compute full HTF DataFrame once (O(N) instead of O(N^2))
+    try:
+        full_htf_df = build_htf_candles(ltf_df, cfg.htf_interval)
+    except Exception:
+        logger.warning("HTF aggregation failed on full LTF data. Aborting backtest.")
+        _compute_summary(result)
+        return result
+
     in_trade = False
     skip_until_bar = 0  # skip bars while in a trade
 
@@ -171,11 +178,11 @@ def run_backtest(
         # Build rolling window up to bar i (inclusive) — no lookahead
         window_ltf = ltf_df.iloc[:i + 1].copy().reset_index(drop=True)
 
-        # Build HTF from LTF window
-        try:
-            htf_df = build_htf_candles(window_ltf, cfg.htf_interval)
-        except Exception:
-            continue
+        # Slice HTF up to current bar's timestamp (no lookahead):
+        # HTF candles use label="right", so timestamp = candle close time.
+        # Filtering <= bar_time ensures we only see completed HTF candles.
+        bar_time = ltf_df["timestamp_utc"].iloc[i]
+        htf_df = full_htf_df[full_htf_df["timestamp_utc"] <= bar_time]
 
         if len(htf_df) < 20:
             continue
@@ -183,8 +190,7 @@ def run_backtest(
         # Compute bias on HTF
         bias = compute_bias(htf_df, cfg.pivot_left_bars, cfg.pivot_right_bars)
 
-        # Get signal timestamp from bar i
-        bar_time = ltf_df["timestamp_utc"].iloc[i]
+        # Convert bar_time to native datetime for signal logic
         if hasattr(bar_time, "to_pydatetime"):
             bar_time = bar_time.to_pydatetime()
 

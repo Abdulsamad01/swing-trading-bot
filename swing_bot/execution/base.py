@@ -5,7 +5,11 @@ Both Delta and CoinSwitch clients implement this interface.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional, TypeVar
+
+from execution.retry import with_retry
+
+T = TypeVar("T")
 
 
 @dataclass
@@ -37,6 +41,16 @@ class PositionInfo:
 
 
 class ExchangeAdapter(ABC):
+
+    def _retry(self, fn: Callable[[], T], label: str) -> T:
+        """Call fn() with retry using config parameters."""
+        return with_retry(
+            fn,
+            max_retries=self.cfg.max_retries,
+            base_delay=self.cfg.retry_base_delay_seconds,
+            jitter_percent=self.cfg.retry_jitter_percent,
+            label=label,
+        )
 
     @abstractmethod
     def set_leverage(self, symbol: str, leverage: int) -> bool:

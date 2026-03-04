@@ -18,12 +18,8 @@ import requests
 
 from config.settings import Config
 from execution.base import ExchangeAdapter, OrderResult, OrderStatusInfo, PositionInfo
-from execution.retry import with_retry
 
 logger = logging.getLogger(__name__)
-
-DELTA_DEMO_BASE = "https://cdn-ind.testnet.deltaex.org"
-DELTA_LIVE_BASE = "https://api.india.delta.exchange"
 
 # Delta side mapping
 SIDE_MAP = {
@@ -43,7 +39,7 @@ class DeltaClient(ExchangeAdapter):
         self.cfg = cfg
         self.api_key = cfg.delta_demo_api_key
         self.api_secret = cfg.delta_demo_api_secret
-        self.base_url = DELTA_DEMO_BASE if cfg.exchange == "delta_demo" else DELTA_LIVE_BASE
+        self.base_url = cfg.delta_demo_base_url if cfg.exchange == "delta_demo" else cfg.delta_live_base_url
         self._product_cache: dict[str, str] = {}
 
     # ------------------------------------------------------------------ auth
@@ -100,13 +96,7 @@ class DeltaClient(ExchangeAdapter):
         try:
             def _call():
                 return self._get("/v2/products", params={"contract_type": "perpetual_futures"})
-            data = with_retry(
-                _call,
-                max_retries=self.cfg.max_retries,
-                base_delay=self.cfg.retry_base_delay_seconds,
-                jitter_percent=self.cfg.retry_jitter_percent,
-                label="delta.get_product_id",
-            )
+            data = self._retry(_call, "delta.get_product_id")
             products = data.get("result", [])
             for product in products:
                 if product.get("symbol") == symbol:
@@ -122,7 +112,7 @@ class DeltaClient(ExchangeAdapter):
                 f"Available perpetual futures ({len(available)}): {', '.join(available)}"
             )
             return None
-        except Exception:
+        except (requests.RequestException, KeyError, ValueError):
             logger.exception("Delta: get_product_id failed after retries")
             return None
 
@@ -138,19 +128,13 @@ class DeltaClient(ExchangeAdapter):
                     "product_id": int(product_id),
                     "leverage": leverage,
                 })
-            resp = with_retry(
-                _call,
-                max_retries=self.cfg.max_retries,
-                base_delay=self.cfg.retry_base_delay_seconds,
-                jitter_percent=self.cfg.retry_jitter_percent,
-                label="delta.set_leverage",
-            )
+            resp = self._retry(_call, "delta.set_leverage")
             if resp.get("success"):
                 logger.info(f"Delta: leverage set to {leverage}x for {symbol}")
                 return True
             logger.error(f"Delta: set_leverage failed: {resp}")
             return False
-        except Exception as e:
+        except (requests.RequestException, KeyError, ValueError) as e:
             logger.error(f"Delta: set_leverage exception: {e}")
             return False
 
@@ -164,13 +148,7 @@ class DeltaClient(ExchangeAdapter):
         try:
             def _call():
                 return self._get("/v2/positions", params={"product_id": product_id})
-            resp = with_retry(
-                _call,
-                max_retries=self.cfg.max_retries,
-                base_delay=self.cfg.retry_base_delay_seconds,
-                jitter_percent=self.cfg.retry_jitter_percent,
-                label="delta.get_position",
-            )
+            resp = self._retry(_call, "delta.get_position")
             result = resp.get("result", {})
             if not result or float(result.get("size", 0)) == 0:
                 return PositionInfo(
@@ -187,7 +165,7 @@ class DeltaClient(ExchangeAdapter):
                 unrealized_pnl=float(result.get("unrealized_pnl", 0)),
                 product_id=product_id,
             )
-        except Exception as e:
+        except (requests.RequestException, KeyError, ValueError) as e:
             logger.error(f"Delta: get_position failed: {e}")
             return None
 
@@ -195,13 +173,7 @@ class DeltaClient(ExchangeAdapter):
         try:
             def _call():
                 return self._get(f"/v2/orders/{order_id}")
-            resp = with_retry(
-                _call,
-                max_retries=self.cfg.max_retries,
-                base_delay=self.cfg.retry_base_delay_seconds,
-                jitter_percent=self.cfg.retry_jitter_percent,
-                label="delta.get_order_status",
-            )
+            resp = self._retry(_call, "delta.get_order_status")
             result = resp.get("result", {})
             state = result.get("state", "").lower()
             status_map = {
@@ -222,7 +194,7 @@ class DeltaClient(ExchangeAdapter):
                 fill_price=fill_price,
                 raw=result,
             )
-        except Exception as e:
+        except (requests.RequestException, KeyError, ValueError) as e:
             logger.error(f"Delta: get_order_status failed: {e}")
             return OrderStatusInfo(order_id=order_id, status="unknown")
 
@@ -249,13 +221,7 @@ class DeltaClient(ExchangeAdapter):
         try:
             def _call():
                 return self._post("/v2/orders", body)
-            resp = with_retry(
-                _call,
-                max_retries=self.cfg.max_retries,
-                base_delay=self.cfg.retry_base_delay_seconds,
-                jitter_percent=self.cfg.retry_jitter_percent,
-                label="delta.place_market_order",
-            )
+            resp = self._retry(_call, "delta.place_market_order")
             if resp.get("success"):
                 r = resp.get("result", {})
                 return OrderResult(
@@ -267,7 +233,7 @@ class DeltaClient(ExchangeAdapter):
                 )
             return OrderResult(success=False, order_id=None, filled_price=None,
                                quantity=None, raw=resp, error=str(resp.get("error", resp)))
-        except Exception as e:
+        except (requests.RequestException, KeyError, ValueError) as e:
             return OrderResult(success=False, order_id=None, filled_price=None,
                                quantity=None, raw=None, error=str(e))
 
@@ -294,13 +260,7 @@ class DeltaClient(ExchangeAdapter):
         try:
             def _call():
                 return self._post("/v2/orders", body)
-            resp = with_retry(
-                _call,
-                max_retries=self.cfg.max_retries,
-                base_delay=self.cfg.retry_base_delay_seconds,
-                jitter_percent=self.cfg.retry_jitter_percent,
-                label="delta.place_stop_order",
-            )
+            resp = self._retry(_call, "delta.place_stop_order")
             if resp.get("success"):
                 r = resp.get("result", {})
                 return OrderResult(
@@ -312,7 +272,7 @@ class DeltaClient(ExchangeAdapter):
                 )
             return OrderResult(success=False, order_id=None, filled_price=None,
                                quantity=None, raw=resp, error=str(resp.get("error", resp)))
-        except Exception as e:
+        except (requests.RequestException, KeyError, ValueError) as e:
             return OrderResult(success=False, order_id=None, filled_price=None,
                                quantity=None, raw=None, error=str(e))
 
@@ -339,13 +299,7 @@ class DeltaClient(ExchangeAdapter):
         try:
             def _call():
                 return self._post("/v2/orders", body)
-            resp = with_retry(
-                _call,
-                max_retries=self.cfg.max_retries,
-                base_delay=self.cfg.retry_base_delay_seconds,
-                jitter_percent=self.cfg.retry_jitter_percent,
-                label="delta.place_limit_order",
-            )
+            resp = self._retry(_call, "delta.place_limit_order")
             if resp.get("success"):
                 r = resp.get("result", {})
                 return OrderResult(
@@ -357,7 +311,7 @@ class DeltaClient(ExchangeAdapter):
                 )
             return OrderResult(success=False, order_id=None, filled_price=None,
                                quantity=None, raw=resp, error=str(resp.get("error", resp)))
-        except Exception as e:
+        except (requests.RequestException, KeyError, ValueError) as e:
             return OrderResult(success=False, order_id=None, filled_price=None,
                                quantity=None, raw=None, error=str(e))
 
@@ -369,15 +323,9 @@ class DeltaClient(ExchangeAdapter):
         try:
             def _call():
                 return self._delete(f"/v2/orders/{order_id}", {"product_id": int(product_id)})
-            resp = with_retry(
-                _call,
-                max_retries=self.cfg.max_retries,
-                base_delay=self.cfg.retry_base_delay_seconds,
-                jitter_percent=self.cfg.retry_jitter_percent,
-                label="delta.cancel_order",
-            )
+            resp = self._retry(_call, "delta.cancel_order")
             return resp.get("success", False)
-        except Exception as e:
+        except (requests.RequestException, KeyError, ValueError) as e:
             logger.error(f"Delta: cancel_order failed: {e}")
             return False
 

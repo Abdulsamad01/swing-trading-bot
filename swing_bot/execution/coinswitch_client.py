@@ -18,7 +18,6 @@ import requests
 
 from config.settings import Config
 from execution.base import ExchangeAdapter, OrderResult, OrderStatusInfo, PositionInfo
-from execution.retry import with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -95,19 +94,13 @@ class CoinSwitchClient(ExchangeAdapter):
                     "symbol": symbol,
                     "leverage": leverage,
                 })
-            resp = with_retry(
-                _call,
-                max_retries=self.cfg.max_retries,
-                base_delay=self.cfg.retry_base_delay_seconds,
-                jitter_percent=self.cfg.retry_jitter_percent,
-                label="coinswitch.set_leverage",
-            )
+            resp = self._retry(_call, "coinswitch.set_leverage")
             if resp.get("success"):
                 logger.info(f"CoinSwitch: leverage set to {leverage}x for {symbol}")
                 return True
             logger.error(f"CoinSwitch: set_leverage failed: {resp}")
             return False
-        except Exception as e:
+        except (requests.RequestException, KeyError, ValueError) as e:
             logger.error(f"CoinSwitch: set_leverage exception: {e}")
             return False
 
@@ -117,13 +110,7 @@ class CoinSwitchClient(ExchangeAdapter):
         try:
             def _call():
                 return self._get("/pro/v1/futures/positions", {"symbol": symbol})
-            resp = with_retry(
-                _call,
-                max_retries=self.cfg.max_retries,
-                base_delay=self.cfg.retry_base_delay_seconds,
-                jitter_percent=self.cfg.retry_jitter_percent,
-                label="coinswitch.get_position",
-            )
+            resp = self._retry(_call, "coinswitch.get_position")
             data = resp.get("data", {})
             positions = data if isinstance(data, list) else [data]
 
@@ -145,7 +132,7 @@ class CoinSwitchClient(ExchangeAdapter):
                 symbol=symbol, direction="flat", size=0,
                 entry_price=0, unrealized_pnl=0,
             )
-        except Exception as e:
+        except (requests.RequestException, KeyError, ValueError) as e:
             logger.error(f"CoinSwitch: get_position failed: {e}")
             return None
 
@@ -156,13 +143,7 @@ class CoinSwitchClient(ExchangeAdapter):
                     "symbol": symbol,
                     "orderId": order_id,
                 })
-            resp = with_retry(
-                _call,
-                max_retries=self.cfg.max_retries,
-                base_delay=self.cfg.retry_base_delay_seconds,
-                jitter_percent=self.cfg.retry_jitter_percent,
-                label="coinswitch.get_order_status",
-            )
+            resp = self._retry(_call, "coinswitch.get_order_status")
             data = resp.get("data", {})
             if isinstance(data, list):
                 data = data[0] if data else {}
@@ -185,7 +166,7 @@ class CoinSwitchClient(ExchangeAdapter):
                 fill_price=fill_price,
                 raw=data,
             )
-        except Exception as e:
+        except (requests.RequestException, KeyError, ValueError) as e:
             logger.error(f"CoinSwitch: get_order_status failed: {e}")
             return OrderStatusInfo(order_id=order_id, status="unknown")
 
@@ -208,13 +189,7 @@ class CoinSwitchClient(ExchangeAdapter):
         try:
             def _call():
                 return self._post("/pro/v1/futures/orders", body)
-            resp = with_retry(
-                _call,
-                max_retries=self.cfg.max_retries,
-                base_delay=self.cfg.retry_base_delay_seconds,
-                jitter_percent=self.cfg.retry_jitter_percent,
-                label="coinswitch.place_market_order",
-            )
+            resp = self._retry(_call, "coinswitch.place_market_order")
             if resp.get("success"):
                 r = resp.get("data", {})
                 return OrderResult(
@@ -226,7 +201,7 @@ class CoinSwitchClient(ExchangeAdapter):
                 )
             return OrderResult(success=False, order_id=None, filled_price=None,
                                quantity=None, raw=resp, error=str(resp.get("msg", resp)))
-        except Exception as e:
+        except (requests.RequestException, KeyError, ValueError) as e:
             return OrderResult(success=False, order_id=None, filled_price=None,
                                quantity=None, raw=None, error=str(e))
 
@@ -249,13 +224,7 @@ class CoinSwitchClient(ExchangeAdapter):
         try:
             def _call():
                 return self._post("/pro/v1/futures/orders", body)
-            resp = with_retry(
-                _call,
-                max_retries=self.cfg.max_retries,
-                base_delay=self.cfg.retry_base_delay_seconds,
-                jitter_percent=self.cfg.retry_jitter_percent,
-                label="coinswitch.place_stop_order",
-            )
+            resp = self._retry(_call, "coinswitch.place_stop_order")
             if resp.get("success"):
                 r = resp.get("data", {})
                 return OrderResult(
@@ -267,7 +236,7 @@ class CoinSwitchClient(ExchangeAdapter):
                 )
             return OrderResult(success=False, order_id=None, filled_price=None,
                                quantity=None, raw=resp, error=str(resp.get("msg", resp)))
-        except Exception as e:
+        except (requests.RequestException, KeyError, ValueError) as e:
             return OrderResult(success=False, order_id=None, filled_price=None,
                                quantity=None, raw=None, error=str(e))
 
@@ -291,13 +260,7 @@ class CoinSwitchClient(ExchangeAdapter):
         try:
             def _call():
                 return self._post("/pro/v1/futures/orders", body)
-            resp = with_retry(
-                _call,
-                max_retries=self.cfg.max_retries,
-                base_delay=self.cfg.retry_base_delay_seconds,
-                jitter_percent=self.cfg.retry_jitter_percent,
-                label="coinswitch.place_limit_order",
-            )
+            resp = self._retry(_call, "coinswitch.place_limit_order")
             if resp.get("success"):
                 r = resp.get("data", {})
                 return OrderResult(
@@ -309,7 +272,7 @@ class CoinSwitchClient(ExchangeAdapter):
                 )
             return OrderResult(success=False, order_id=None, filled_price=None,
                                quantity=None, raw=resp, error=str(resp.get("msg", resp)))
-        except Exception as e:
+        except (requests.RequestException, KeyError, ValueError) as e:
             return OrderResult(success=False, order_id=None, filled_price=None,
                                quantity=None, raw=None, error=str(e))
 
@@ -320,15 +283,9 @@ class CoinSwitchClient(ExchangeAdapter):
                     "symbol": symbol,
                     "orderId": order_id,
                 })
-            resp = with_retry(
-                _call,
-                max_retries=self.cfg.max_retries,
-                base_delay=self.cfg.retry_base_delay_seconds,
-                jitter_percent=self.cfg.retry_jitter_percent,
-                label="coinswitch.cancel_order",
-            )
+            resp = self._retry(_call, "coinswitch.cancel_order")
             return resp.get("success", False)
-        except Exception as e:
+        except (requests.RequestException, KeyError, ValueError) as e:
             logger.error(f"CoinSwitch: cancel_order failed: {e}")
             return False
 
