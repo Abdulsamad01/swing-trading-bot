@@ -85,11 +85,21 @@ def compute_sizing(
 
     notional_usdt = entry_price * quantity
 
-    # Enforce exchange minimum notional — bump quantity up if needed
+    # Enforce exchange minimum notional — bump quantity up if needed, but cap at risk budget
     if min_notional > 0 and notional_usdt < min_notional and entry_price > 0:
         min_qty_for_notional = min_notional / entry_price
         if cfg.exchange == "delta_demo":
             min_qty_for_notional = math.ceil(min_qty_for_notional)
+        allowed_qty = risk_budget_usdt / entry_price
+        if cfg.exchange == "delta_demo":
+            allowed_qty = math.ceil(allowed_qty)
+        if min_qty_for_notional > allowed_qty:
+            logger.warning(
+                "Sizing: min notional requires qty %.4f but risk cap allows only %.4f "
+                "(risk_budget_usdt=%.2f); capping to risk budget",
+                min_qty_for_notional, allowed_qty, risk_budget_usdt,
+            )
+            min_qty_for_notional = allowed_qty
         if min_qty_for_notional > quantity:
             logger.info(
                 "Sizing: bumping qty from %.4f to %.4f to meet min notional %.2f USDT (was %.2f)",

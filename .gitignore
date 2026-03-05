@@ -16,3 +16,5 @@ delta-bot-key.pem
 tradingbot-agents/
 flake8_output.txt
 pylint_output.txt
+# pip install console output artifacts
+=*

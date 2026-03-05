@@ -498,8 +498,8 @@ class TradingBot:
             return
 
         # 5. Compute sizing (fetch min notional from exchange)
-        min_notional = self.exchange.get_min_notional(self.cfg.symbol)
         try:
+            min_notional = self.exchange.get_min_notional(self.cfg.symbol)
             sizing = compute_sizing(self.cfg, signal.entry_price, signal.stop_loss, min_notional)
         except ValueError as e:
             logger.warning(f"Sizing rejected: {e}")
