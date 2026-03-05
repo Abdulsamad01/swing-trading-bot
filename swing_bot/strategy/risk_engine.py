@@ -44,15 +44,17 @@ def compute_sizing(
     cfg: Config,
     entry_price: float,
     stop_loss: float,
+    min_notional: float = 0.0,
 ) -> SizingResult:
     """
     Compute position sizing for a trade.
 
     Parameters
     ----------
-    cfg         : loaded Config
-    entry_price : planned entry price (USDT)
-    stop_loss   : planned stop loss price (USDT)
+    cfg          : loaded Config
+    entry_price  : planned entry price (USDT)
+    stop_loss    : planned stop loss price (USDT)
+    min_notional : exchange minimum order notional in USDT (fetched live)
 
     Returns
     -------
@@ -60,7 +62,7 @@ def compute_sizing(
 
     Raises
     ------
-    ValueError if sl_distance <= 0
+    ValueError if sl_distance <= 0 or if notional cannot meet minimum
     """
     sl_distance = abs(entry_price - stop_loss)
     if sl_distance <= 0:
@@ -76,13 +78,26 @@ def compute_sizing(
         quantity = math.floor(risk_budget_usdt / sl_distance)
         quantity = max(quantity, 1)
     else:
-        # CoinSwitch uses decimal quantity — use Decimal to avoid
-        # floating-point imprecision at tick-size/lot-size boundaries
+        # CoinSwitch / Binance use decimal quantity
         d_budget = Decimal(str(risk_budget_usdt))
         d_sl = Decimal(str(sl_distance))
         quantity = float(d_budget / d_sl)
 
     notional_usdt = entry_price * quantity
+
+    # Enforce exchange minimum notional — bump quantity up if needed
+    if min_notional > 0 and notional_usdt < min_notional and entry_price > 0:
+        min_qty_for_notional = min_notional / entry_price
+        if cfg.exchange == "delta_demo":
+            min_qty_for_notional = math.ceil(min_qty_for_notional)
+        if min_qty_for_notional > quantity:
+            logger.info(
+                "Sizing: bumping qty from %.4f to %.4f to meet min notional %.2f USDT (was %.2f)",
+                quantity, min_qty_for_notional, min_notional, notional_usdt,
+            )
+            quantity = min_qty_for_notional
+            notional_usdt = entry_price * quantity
+
     margin_usdt = notional_usdt / cfg.leverage
     est_fee_usdt = notional_usdt * (cfg.effective_fee_percent / 100.0)
 

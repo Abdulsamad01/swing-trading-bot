@@ -116,6 +116,25 @@ class DeltaClient(ExchangeAdapter):
             logger.exception("Delta: get_product_id failed after retries")
             return None
 
+    def get_ticker_price(self, symbol: str) -> Optional[float]:
+        try:
+            product_id = self.get_product_id(symbol)
+            if not product_id:
+                return None
+            def _call():
+                return self._get(f"/v2/tickers/{product_id}")
+            resp = self._retry(_call, "delta.get_ticker_price")
+            result = resp.get("result", {})
+            price = result.get("close") or result.get("mark_price")
+            return float(price) if price else None
+        except Exception as e:
+            logger.error("Delta: get_ticker_price failed: %s", e)
+            return None
+
+    def get_min_notional(self, symbol: str) -> float:
+        # Delta uses integer contracts; 1 contract is the minimum
+        return 0.0  # no meaningful min notional in USDT terms
+
     # ------------------------------------------------------------ leverage
 
     def set_leverage(self, symbol: str, leverage: int) -> bool:

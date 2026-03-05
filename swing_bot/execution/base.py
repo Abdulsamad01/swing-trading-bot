@@ -116,3 +116,13 @@ class ExchangeAdapter(ABC):
     def get_product_id(self, symbol: str) -> Optional[str]:
         """Return exchange-specific product/contract ID for symbol."""
         ...
+
+    @abstractmethod
+    def get_ticker_price(self, symbol: str) -> Optional[float]:
+        """Fetch current market price for symbol. Returns None on failure."""
+        ...
+
+    @abstractmethod
+    def get_min_notional(self, symbol: str) -> float:
+        """Return minimum order notional (in USDT) for symbol. Returns 0 if unknown."""
+        ...

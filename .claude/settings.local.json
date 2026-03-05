@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tail:*)",
+      "Bash(cd /d/swing_trade && git rm --cached delta-bot-key.pem flake8_output.txt pylint_output.txt 2>&1)",
+      "Bash(cd /d/swing_trade && git rm --cached flake8_output.txt pylint_output.txt 2>&1)",
+      "Bash(python:*)",
+      "Bash(curl:*)",
+      "WebSearch",
+      "WebFetch(domain:developers.binance.com)",
+      "WebFetch(domain:api-trading.coinswitch.co)",
+      "Bash(pip install:*)"
+    ]
+  }
+}

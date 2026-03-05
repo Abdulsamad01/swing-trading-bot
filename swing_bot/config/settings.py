@@ -51,7 +51,7 @@ class Config:
     exchange: str = ""              # delta_demo | binance_testnet | coinswitch_live
     market_type: str = "futures"
     symbol: str = "ADAUSDT"
-    demo_symbol: str = "XRPUSD"
+    demo_symbol: str = "XRPUSDT"
     live_symbol: str = "ADAUSDT"
     profile: str = ""               # ltf_5m | ltf_15m
     leverage: int = 3
@@ -115,6 +115,7 @@ class Config:
     binance_testnet_api_secret: str = ""
     coinswitch_api_key: str = ""
     coinswitch_api_secret: str = ""
+    coinswitch_futures_exchange: str = ""
 
     # --- Reconciliation ---
     reconcile_interval_seconds: int = 30
@@ -176,7 +177,7 @@ def load_config() -> Config:
     if market_type != "futures":
         raise ValueError("MARKET_TYPE must be 'futures'")
 
-    demo_symbol = (_get("DEMO_SYMBOL", "XRPUSD") or "").strip()
+    demo_symbol = (_get("DEMO_SYMBOL", "XRPUSDT") or "").strip()
     live_symbol = (_get("LIVE_SYMBOL", "ADAUSDT") or "").strip()
     if not demo_symbol:
         raise ValueError("DEMO_SYMBOL must not be empty")
@@ -306,6 +307,7 @@ def load_config() -> Config:
         binance_testnet_api_secret=binance_testnet_api_secret,
         coinswitch_api_key=coinswitch_api_key,
         coinswitch_api_secret=coinswitch_api_secret,
+        coinswitch_futures_exchange=_get("COINSWITCH_FUTURES_EXCHANGE", ""),
         reconcile_interval_seconds=reconcile_interval,
         trailing_sl_enabled=_getbool("TRAILING_SL_ENABLED", True),
         atr_trail_mult=_getfloat("ATR_TRAIL_MULT", 1.5),
