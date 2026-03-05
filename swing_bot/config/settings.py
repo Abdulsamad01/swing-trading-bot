@@ -232,6 +232,9 @@ def load_config() -> Config:
     if exchange == "coinswitch_live":
         if not coinswitch_api_key or not coinswitch_api_secret:
             raise ValueError("COINSWITCH_API_KEY and COINSWITCH_API_SECRET are required for coinswitch_live exchange")
+        coinswitch_futures_exchange = _get("COINSWITCH_FUTURES_EXCHANGE", "")
+        if not coinswitch_futures_exchange:
+            raise ValueError("COINSWITCH_FUTURES_EXCHANGE must be set for coinswitch_live exchange")
 
     sqlite_path = _get("SQLITE_PATH", "swing_bot.db")
     log_level = _get("LOG_LEVEL", "INFO")

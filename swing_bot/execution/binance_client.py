@@ -151,15 +151,15 @@ class BinanceClient(ExchangeAdapter):
         return quantity
 
     def _round_price(self, symbol: str, price: float) -> float:
-        """Round price to the symbol's tick size precision."""
+        """Snap price to the nearest multiple of the symbol's tick size."""
+        from decimal import Decimal, ROUND_HALF_UP
         self._load_symbol_info(symbol)
         info = self._symbol_info.get(symbol)
         if info and "tick_size" in info:
-            tick = info["tick_size"]
-            if tick >= 1:
-                return round(price)
-            precision = len(str(tick).rstrip("0").split(".")[-1])
-            return round(price, precision)
+            tick = Decimal(str(info["tick_size"]))
+            d_price = Decimal(str(price))
+            snapped = (d_price / tick).quantize(Decimal("1"), rounding=ROUND_HALF_UP) * tick
+            return float(snapped)
         return round(price, 4)
 
     # ---------------------------------------------------------- product lookup
